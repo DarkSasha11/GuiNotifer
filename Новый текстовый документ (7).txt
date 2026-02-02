@@ -1,0 +1,64 @@
+-- ==============================================================================
+-- 🧢 2. CAPYNOTIFER GUI (С АВТО-ОЧИСТКОЙ API)
+-- ==============================================================================
+local API_URL = "https://69804bc36570ee87d50eb123.mockapi.io/CAPYNOTIFER/CapyNotifer"
+local Http = game:GetService("HttpService")
+local TPS = game:GetService("TeleportService")
+local Players = game:GetService("Players")
+local CoreGui = game:GetService("CoreGui")
+local TweenService = game:GetService("TweenService")
+local Debris = game:GetService("Debris") 
+
+local AUTO_JOIN_ENABLED = false
+local PROCESSED_IDS = {}
+local LOG_LIFETIME = 60 -- Время жизни лога в секундах
+
+local COLORS = { BG = Color3.fromRGB(18, 18, 24), CARD = Color3.fromRGB(26, 28, 38), ACCENT = Color3.fromRGB(114, 137, 218), TEXT_MAIN = Color3.fromRGB(255, 255, 255), TEXT_DIM = Color3.fromRGB(169, 177, 214), GREEN = Color3.fromRGB(65, 168, 95), BUTTON_OFF = Color3.fromRGB(41, 46, 66) }
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "CapyNotiferUI_Final"
+if pcall(function() ScreenGui.Parent = CoreGui end) then else ScreenGui.Parent = Players.LocalPlayer.PlayerGui end
+
+-- [СОЗДАНИЕ ИНТЕРФЕЙСА, БЕЗ ИЗМЕНЕНИЙ]
+local MainFrame=Instance.new("Frame");MainFrame.Name="MainFrame";MainFrame.Size=UDim2.new(0,500,0,450);MainFrame.Position=UDim2.new(0.5,-250,0.5,-225);MainFrame.BackgroundColor3=COLORS.BG;MainFrame.BorderSizePixel=0;MainFrame.Parent=ScreenGui;local a=Instance.new("UICorner");a.CornerRadius=UDim.new(0,12);a.Parent=MainFrame;local b=Instance.new("UIStroke");b.Color=Color3.fromRGB(41,46,66);b.Thickness=2;b.Parent=MainFrame;local c=Instance.new("Frame");c.Size=UDim2.new(1,0,0,50);c.BackgroundTransparency=1;c.Parent=MainFrame;local d=Instance.new("TextLabel");d.Text="CapyNotifer";d.Font=Enum.Font.GothamBlack;d.TextSize=22;d.TextColor3=COLORS.TEXT_MAIN;d.Size=UDim2.new(0,200,1,0);d.Position=UDim2.new(0,20,0,0);d.TextXAlignment=Enum.TextXAlignment.Left;d.BackgroundTransparency=1;d.Parent=c;local e=Instance.new("TextButton");e.Text="×";e.TextColor3=COLORS.TEXT_DIM;e.BackgroundTransparency=1;e.TextSize=24;e.Size=UDim2.new(0,40,0,40);e.Position=UDim2.new(1,-45,0,5);e.Parent=c;e.MouseButton1Click:Connect(function()ScreenGui:Destroy()end);local f=Instance.new("TextLabel");f.Text="ACTIVE SERVERS";f.Font=Enum.Font.GothamBold;f.TextSize=12;f.TextColor3=COLORS.TEXT_DIM;f.Size=UDim2.new(1,-40,0,20);f.Position=UDim2.new(0,20,0,55);f.TextXAlignment=Enum.TextXAlignment.Left;f.BackgroundTransparency=1;f.Parent=MainFrame;local g=Instance.new("Frame");g.Size=UDim2.new(1,-40,1,-140);g.Position=UDim2.new(0,20,0,80);g.BackgroundColor3=Color3.fromRGB(13,13,17);g.BorderSizePixel=0;g.Parent=MainFrame;local h=Instance.new("UICorner");h.CornerRadius=UDim.new(0,8);h.Parent=g;local i=Instance.new("ScrollingFrame");i.Size=UDim2.new(1,-10,1,-10);i.Position=UDim2.new(0,5,0,5);i.BackgroundTransparency=1;i.ScrollBarThickness=4;i.ScrollBarImageColor3=COLORS.ACCENT;i.Parent=g;local j=Instance.new("UIListLayout");j.Padding=UDim.new(0,8);j.SortOrder=Enum.SortOrder.LayoutOrder;j.Parent=i;local k=Instance.new("Frame");k.Size=UDim2.new(1,0,0,60);k.Position=UDim2.new(0,0,1,-60);k.BackgroundTransparency=1;k.Parent=MainFrame;local l=Instance.new("TextButton");l.Name="AutoJoinBtn";l.Size=UDim2.new(1,-40,0,40);l.Position=UDim2.new(0,20,0,10);l.BackgroundColor3=COLORS.BUTTON_OFF;l.Text="AUTO JOIN: OFF";l.Font=Enum.Font.GothamBold;l.TextSize=16;l.TextColor3=COLORS.TEXT_MAIN;l.AutoButtonColor=false;l.Parent=k;local m=Instance.new("UICorner");m.CornerRadius=UDim.new(0,8);m.Parent=l;l.MouseButton1Click:Connect(function()AUTO_JOIN_ENABLED=not AUTO_JOIN_ENABLED;local n=AUTO_JOIN_ENABLED;l.Text="AUTO JOIN: "..(n and"ON"or"OFF");TweenService:Create(l,TweenInfo.new(0.3),{BackgroundColor3=n and COLORS.GREEN or COLORS.BUTTON_OFF}):Play()end);local o=Instance.new("Sound");o.SoundId="rbxassetid://9117622489";o.Volume=0.8;o.Parent=ScreenGui;local UserInputService=game:GetService("UserInputService");local p,q,r,s;local function t(u)local v=u.Position-r;MainFrame.Position=UDim2.new(s.X.Scale,s.X.Offset+v.X,s.Y.Scale,s.Y.Offset+v.Y)end;c.InputBegan:Connect(function(w)if w.UserInputType==Enum.UserInputType.MouseButton1 then p=true;r=w.Position;s=MainFrame.Position;w.Changed:Connect(function()if w.UserInputState==Enum.UserInputState.End then p=false end end)end end);c.InputChanged:Connect(function(x)if x.UserInputType==Enum.UserInputType.MouseMovement then q=x end end);UserInputService.InputChanged:Connect(function(y)if y==q and p then t(y)end end)
+
+local function createLog(data)
+    local Card=Instance.new("Frame");Card.Name="LogCard";Card.Size=UDim2.new(1,-4,0,50);Card.BackgroundColor3=COLORS.CARD;Card.BorderSizePixel=0;Card.Parent=i;local z=Instance.new("UICorner");z.CornerRadius=UDim.new(0,6);z.Parent=Card;local A=Instance.new("TextLabel");A.Text=data.name or"???";A.Font=Enum.Font.GothamBold;A.TextSize=14;A.TextColor3=COLORS.TEXT_MAIN;A.Size=UDim2.new(0.5,0,0.5,0);A.Position=UDim2.new(0.03,0,0.1,0);A.TextXAlignment=Enum.TextXAlignment.Left;A.BackgroundTransparency=1;A.Parent=Card;local B=Instance.new("TextLabel");B.Text="Gen: "..(data.gen or"0/s");B.Font=Enum.Font.Gotham;B.TextSize=12;B.TextColor3=COLORS.TEXT_DIM;B.Size=UDim2.new(0.5,0,0.4,0);B.Position=UDim2.new(0.03,0,0.55,0);B.TextXAlignment=Enum.TextXAlignment.Left;B.BackgroundTransparency=1;B.Parent=Card;local C=Instance.new("TextButton");C.Text="JOIN";C.Size=UDim2.new(0,80,0,30);C.Position=UDim2.new(1,-90,0.5,-15);C.BackgroundColor3=COLORS.ACCENT;C.TextColor3=COLORS.TEXT_MAIN;C.Font=Enum.Font.GothamBold;C.TextSize=12;C.Parent=Card;local D=Instance.new("UICorner");D.CornerRadius=UDim.new(0,6);D.Parent=C;C.MouseButton1Click:Connect(function()if data.placeId and data.jobId then TPS:TeleportToPlaceInstance(tonumber(data.placeId),data.jobId,Players.LocalPlayer)end end);Card.LayoutOrder=-tonumber(data.id);Debris:AddItem(Card,LOG_LIFETIME)
+end
+
+print("✅ CapyNotifer GUI Запущен. Включена авто-очистка.")
+task.spawn(function()
+    while task.wait(3) do -- Проверяем каждые 3 секунды для надежности
+        local success, response = pcall(function() return game:HttpGet(API_URL) end)
+        if success then
+            local decoded_success, decoded_data = pcall(Http.JSONDecode, Http, response)
+            if decoded_success and type(decoded_data) == "table" then
+                
+                for _, item in ipairs(decoded_data) do
+                    if not item or not item.id then continue end
+
+                    -- 🔥 ПРОВЕРКА И УДАЛЕНИЕ СТАРЫХ ЛОГОВ ИЗ API
+                    if item.createdAt_unix and (os.time() - tonumber(item.createdAt_unix) > LOG_LIFETIME) then
+                        -- Этот лог слишком старый, удаляем его из API
+                        task.spawn(function()
+                            local req = syn and syn.request or request or http_request
+                            if req then req({ Url = API_URL .. "/" .. item.id, Method = "DELETE" }) end
+                        end)
+                        PROCESSED_IDS[item.id] = nil -- Чистим из памяти
+                        continue -- Переходим к следующему
+                    end
+
+                    -- ОБРАБОТКА НОВЫХ ЛОГОВ
+                    if not PROCESSED_IDS[item.id] then
+                        PROCESSED_IDS[item.id] = true
+                        createLog(item)
+                        o:Play()
+                        if AUTO_JOIN_ENABLED then
+                            TPS:TeleportToPlaceInstance(tonumber(item.placeId), item.jobId, Players.LocalPlayer)
+                            task.wait(5)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
