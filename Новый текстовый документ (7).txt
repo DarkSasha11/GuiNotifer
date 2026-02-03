@@ -1,5 +1,5 @@
 -- ==============================================================================
--- 🧢 2. CAPYNOTIFER GUI (BEAUTIFUL DARK VERSION)
+-- 🧢 2. CAPYNOTIFER GUI (ФИНАЛ: ЛОГИ + ТАБЛИЧКИ ИГРОКОВ)
 -- ==============================================================================
 local API_URL = "https://69804bc36570ee87d50eb123.mockapi.io/CAPYNOTIFER/CapyNotifer"
 local SAVE_FILE_NAME = "CapyNotifer_Settings.json" 
@@ -10,37 +10,106 @@ local PROCESSED_LOG_IDS = {}
 local LOG_LIFETIME = 60 
 local isMidTierFilterActive, isHighTierFilterActive
 
+-- [ЗАГРУЗКА НАСТРОЕК]
 local function saveSettings() local settings = { mid_active = isMidTierFilterActive, high_active = isHighTierFilterActive }; writefile(SAVE_FILE_NAME, Http:JSONEncode(settings)) end
 local function loadSettings() if isfile(SAVE_FILE_NAME) then local success, data = pcall(function() return Http:JSONDecode(readfile(SAVE_FILE_NAME)) end) if success and type(data) == "table" then isMidTierFilterActive = data.mid_active; isHighTierFilterActive = data.high_active; return end end; isMidTierFilterActive = true; isHighTierFilterActive = true; end
 loadSettings()
 
--- [ЦВЕТА И СТИЛЬ]
-local COLORS = { 
-    BG=Color3.fromRGB(15, 15, 20), 
-    CARD=Color3.fromRGB(30, 32, 45), 
-    ACCENT=Color3.fromRGB(114,137,218), 
-    TEXT_MAIN=Color3.new(1,1,1), 
-    TEXT_DIM=Color3.fromRGB(140,145,170), 
-    GREEN=Color3.fromRGB(65,168,95), 
-    SHIMMER_YELLOW=Color3.fromRGB(255,230,0), 
-    SHIMMER_RED=Color3.fromRGB(255,0,0) 
-}
-
-local ScreenGui = Instance.new("ScreenGui"); ScreenGui.Name = "CapyNotiferUI_BEAUTIFUL"; if pcall(function() ScreenGui.Parent = CoreGui end) then else ScreenGui.Parent = Players.LocalPlayer.PlayerGui end
-local MainFrame=Instance.new("Frame");MainFrame.Name="MainFrame";MainFrame.Size=UDim2.new(0,500,0,450);MainFrame.Position=UDim2.new(0.5,-250,0.5,-225);MainFrame.BackgroundColor3=COLORS.BG;MainFrame.BorderSizePixel=0;MainFrame.Parent=ScreenGui;local a=Instance.new("UICorner");a.CornerRadius=UDim.new(0,12);a.Parent=MainFrame;local b=Instance.new("UIStroke");b.Color=Color3.fromRGB(41,46,66);b.Thickness=2;b.Parent=MainFrame;local c=Instance.new("Frame");c.Size=UDim2.new(1,0,0,50);c.BackgroundTransparency=1;c.Parent=MainFrame;local d=Instance.new("TextLabel");d.Text="CapyNotifer";d.Font=Enum.Font.GothamBlack;d.TextSize=24;d.TextColor3=COLORS.TEXT_MAIN;d.Size=UDim2.new(0,200,1,0);d.Position=UDim2.new(0,20,0,0);d.TextXAlignment=Enum.TextXAlignment.Left;d.BackgroundTransparency=1;d.Parent=c;local e=Instance.new("TextButton");e.Text="×";e.TextColor3=COLORS.TEXT_DIM;e.BackgroundTransparency=1;e.TextSize=24;e.Size=UDim2.new(0,40,0,40);e.Position=UDim2.new(1,-45,0,5);e.Parent=c;e.MouseButton1Click:Connect(function()ScreenGui:Destroy()end);local f=Instance.new("TextLabel");f.Text="ACTIVE SERVERS";f.Font=Enum.Font.GothamBold;f.TextSize=12;f.TextColor3=COLORS.TEXT_DIM;f.Size=UDim2.new(0,150,0,20);f.Position=UDim2.new(0,20,0,55);f.TextXAlignment=Enum.TextXAlignment.Left;f.BackgroundTransparency=1;f.Parent=MainFrame;local ScrollContainer=Instance.new("Frame");ScrollContainer.Size=UDim2.new(1,-40,1,-140);ScrollContainer.Position=UDim2.new(0,20,0,80);ScrollContainer.BackgroundColor3=Color3.fromRGB(10,10,14);ScrollContainer.BorderSizePixel=0;ScrollContainer.Parent=MainFrame;local h=Instance.new("UICorner");h.CornerRadius=UDim.new(0,8);h.Parent=ScrollContainer;local i=Instance.new("ScrollingFrame");i.Name="Scroll";i.Size=UDim2.new(1,-10,1,-10);i.Position=UDim2.new(0,5,0,5);i.BackgroundTransparency=1;i.ScrollBarThickness=4;i.ScrollBarImageColor3=COLORS.ACCENT;i.Parent=ScrollContainer;local j=Instance.new("UIListLayout");j.Padding=UDim.new(0,8);j.SortOrder=Enum.SortOrder.LayoutOrder;j.Parent=i;local BottomPanel=Instance.new("Frame");BottomPanel.Size=UDim2.new(1,0,0,60);BottomPanel.Position=UDim2.new(0,0,1,-60);BottomPanel.BackgroundTransparency=1;BottomPanel.Parent=MainFrame;local l=Instance.new("TextButton");l.Name="AutoJoinBtn";l.Size=UDim2.new(1,-40,0,40);l.Position=UDim2.new(0,20,0,10);l.BackgroundColor3=Color3.fromRGB(41,46,66);l.Text="AUTO JOIN: OFF";l.Font=Enum.Font.GothamBold;l.TextSize=16;l.TextColor3=COLORS.TEXT_MAIN;l.AutoButtonColor=false;l.Parent=BottomPanel;local m=Instance.new("UICorner");m.CornerRadius=UDim.new(0,8);m.Parent=l;l.MouseButton1Click:Connect(function()AUTO_JOIN_ENABLED=not AUTO_JOIN_ENABLED;local n=AUTO_JOIN_ENABLED;l.Text="AUTO JOIN: "..(n and"ON"or"OFF");TweenService:Create(l,TweenInfo.new(0.3),{BackgroundColor3=n and COLORS.GREEN or Color3.fromRGB(41,46,66)}):Play()end);local UserInputService=game:GetService("UserInputService");local p,q,r,s;local function t(u)local v=u.Position-r;MainFrame.Position=UDim2.new(s.X.Scale,s.X.Offset+v.X,s.Y.Scale,s.Y.Offset+v.Y)end;c.InputBegan:Connect(function(w)if w.UserInputType==Enum.UserInputType.MouseButton1 then p=true;r=w.Position;s=MainFrame.Position;w.Changed:Connect(function()if w.UserInputState==Enum.UserInputState.End then p=false end end)end end);c.InputChanged:Connect(function(x)if x.UserInputType==Enum.UserInputType.MouseMovement then q=x end end);UserInputService.InputChanged:Connect(function(y)if y==q and p then t(y)end end)
-local sound=Instance.new("Sound");sound.SoundId="rbxassetid://130553659";sound.Volume=3;sound.Parent=ScreenGui;
+-- [СОЗДАНИЕ ИНТЕРФЕЙСА]
+local COLORS = { BG=Color3.fromRGB(18,18,24), CARD=Color3.fromRGB(36, 38, 50), CARD_INACTIVE=Color3.fromRGB(26,28,38), ACCENT=Color3.fromRGB(114,137,218), TEXT_MAIN=Color3.new(1,1,1), TEXT_DIM=Color3.fromRGB(140,145,170), GREEN=Color3.fromRGB(65,168,95), SHIMMER_YELLOW=Color3.fromRGB(255,230,0), SHIMMER_RED=Color3.fromRGB(255,0,0) }
+local ScreenGui = Instance.new("ScreenGui"); ScreenGui.Name = "CapyNotiferUI_FINAL_TAGS"; if pcall(function() ScreenGui.Parent = CoreGui end) then else ScreenGui.Parent = Players.LocalPlayer.PlayerGui end
+local MainFrame=Instance.new("Frame");MainFrame.Name="MainFrame";MainFrame.Size=UDim2.new(0,500,0,450);MainFrame.Position=UDim2.new(0.5,-250,0.5,-225);MainFrame.BackgroundColor3=COLORS.BG;MainFrame.BorderSizePixel=0;MainFrame.Parent=ScreenGui;local a=Instance.new("UICorner");a.CornerRadius=UDim.new(0,12);a.Parent=MainFrame;local b=Instance.new("UIStroke");b.Color=Color3.fromRGB(41,46,66);b.Thickness=2;b.Parent=MainFrame;local c=Instance.new("Frame");c.Size=UDim2.new(1,0,0,50);c.BackgroundTransparency=1;c.Parent=MainFrame;local d=Instance.new("TextLabel");d.Text="CapyNotifer";d.Font=Enum.Font.GothamBlack;d.TextSize=22;d.TextColor3=COLORS.TEXT_MAIN;d.Size=UDim2.new(0,200,1,0);d.Position=UDim2.new(0,20,0,0);d.TextXAlignment=Enum.TextXAlignment.Left;d.BackgroundTransparency=1;d.Parent=c;local e=Instance.new("TextButton");e.Text="×";e.TextColor3=COLORS.TEXT_DIM;e.BackgroundTransparency=1;e.TextSize=24;e.Size=UDim2.new(0,40,0,40);e.Position=UDim2.new(1,-45,0,5);e.Parent=c;e.MouseButton1Click:Connect(function()ScreenGui:Destroy()end);local f=Instance.new("TextLabel");f.Text="ACTIVE SERVERS";f.Font=Enum.Font.GothamBold;f.TextSize=12;f.TextColor3=COLORS.TEXT_DIM;f.Size=UDim2.new(0,150,0,20);f.Position=UDim2.new(0,20,0,55);f.TextXAlignment=Enum.TextXAlignment.Left;f.BackgroundTransparency=1;f.Parent=MainFrame;local ScrollContainer=Instance.new("Frame");ScrollContainer.Size=UDim2.new(1,-40,1,-140);ScrollContainer.Position=UDim2.new(0,20,0,80);ScrollContainer.BackgroundColor3=Color3.fromRGB(13,13,17);ScrollContainer.BorderSizePixel=0;ScrollContainer.Parent=MainFrame;local h=Instance.new("UICorner");h.CornerRadius=UDim.new(0,8);h.Parent=ScrollContainer;local i=Instance.new("ScrollingFrame");i.Name="Scroll";i.Size=UDim2.new(1,-10,1,-10);i.Position=UDim2.new(0,5,0,5);i.BackgroundTransparency=1;i.ScrollBarThickness=4;i.ScrollBarImageColor3=COLORS.ACCENT;i.Parent=ScrollContainer;local j=Instance.new("UIListLayout");j.Padding=UDim.new(0,8);j.SortOrder=Enum.SortOrder.LayoutOrder;j.Parent=i;local BottomPanel=Instance.new("Frame");BottomPanel.Size=UDim2.new(1,0,0,60);BottomPanel.Position=UDim2.new(0,0,1,-60);BottomPanel.BackgroundTransparency=1;BottomPanel.Parent=MainFrame;local l=Instance.new("TextButton");l.Name="AutoJoinBtn";l.Size=UDim2.new(1,-40,0,40);l.Position=UDim2.new(0,20,0,10);l.BackgroundColor3=Color3.fromRGB(41,46,66);l.Text="AUTO JOIN: OFF";l.Font=Enum.Font.GothamBold;l.TextSize=16;l.TextColor3=COLORS.TEXT_MAIN;l.AutoButtonColor=false;l.Parent=BottomPanel;local m=Instance.new("UICorner");m.CornerRadius=UDim.new(0,8);m.Parent=l;l.MouseButton1Click:Connect(function()AUTO_JOIN_ENABLED=not AUTO_JOIN_ENABLED;local n=AUTO_JOIN_ENABLED;l.Text="AUTO JOIN: "..(n and"ON"or"OFF");TweenService:Create(l,TweenInfo.new(0.3),{BackgroundColor3=n and COLORS.GREEN or Color3.fromRGB(41,46,66)}):Play()end);local UserInputService=game:GetService("UserInputService");local p,q,r,s;local function t(u)local v=u.Position-r;MainFrame.Position=UDim2.new(s.X.Scale,s.X.Offset+v.X,s.Y.Scale,s.Y.Offset+v.Y)end;c.InputBegan:Connect(function(w)if w.UserInputType==Enum.UserInputType.MouseButton1 then p=true;r=w.Position;s=MainFrame.Position;w.Changed:Connect(function()if w.UserInputState==Enum.UserInputState.End then p=false end end)end end);c.InputChanged:Connect(function(x)if x.UserInputType==Enum.UserInputType.MouseMovement then q=x end end);UserInputService.InputChanged:Connect(function(y)if y==q and p then t(y)end end)
+local sound=Instance.new("Sound");sound.SoundId="rbxassetid://5106196231";sound.Volume=5;sound.Parent=ScreenGui;
 local filterContainer=Instance.new("Frame");filterContainer.Size=UDim2.new(0,220,0,30);filterContainer.Position=UDim2.new(1,-240,0,49);filterContainer.BackgroundTransparency=1;filterContainer.Parent=MainFrame;local filterLayout=Instance.new("UIListLayout");filterLayout.FillDirection=Enum.FillDirection.Horizontal;filterLayout.HorizontalAlignment=Enum.HorizontalAlignment.Right;filterLayout.VerticalAlignment=Enum.VerticalAlignment.Center;filterLayout.Padding=UDim.new(0,10);filterLayout.Parent=filterContainer;
 local function createFilterButton(text, shimmerColor) local button = Instance.new("TextButton"); button.Size = UDim2.new(0, 90, 0, 28); button.Text = text; button.Font = Enum.Font.GothamBold; button.TextSize = 12; button.Parent = filterContainer; local corner = Instance.new("UICorner"); corner.CornerRadius = UDim.new(0, 6); corner.Parent = button; local stroke = Instance.new("UIStroke"); stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; stroke.Thickness = 1.5; stroke.Parent = button; local gradient = Instance.new("UIGradient"); gradient.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, shimmerColor), ColorSequenceKeypoint.new(0.5, Color3.new(1,1,1)), ColorSequenceKeypoint.new(1, shimmerColor)}); gradient.Rotation = 0; gradient.Parent = stroke; return button, gradient end
 local midTierBtn, midGradient = createFilterButton("1m-9m", COLORS.SHIMMER_YELLOW);
 local highTierBtn, highGradient = createFilterButton("10m+", COLORS.SHIMMER_RED);
-local function updateFilterButtonVisuals(button, gradient, isActive) gradient.Enabled = isActive; local targetBgColor = isActive and COLORS.CARD or Color3.fromRGB(26,28,38); local targetTextColor = isActive and COLORS.TEXT_MAIN or COLORS.TEXT_DIM; TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = targetBgColor, TextColor3 = targetTextColor}):Play() end
+local function updateFilterButtonVisuals(button, gradient, isActive) gradient.Enabled = isActive; local targetBgColor = isActive and COLORS.CARD or COLORS.CARD_INACTIVE; local targetTextColor = isActive and COLORS.TEXT_MAIN or COLORS.TEXT_DIM; TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = targetBgColor, TextColor3 = targetTextColor}):Play() end
 function shouldShowLog(item) if not item or not item.gen_value then return false end; local gen_val = tonumber(item.gen_value) or 0; if isMidTierFilterActive and (gen_val >= 1e6 and gen_val < 10e6) then return true end; if isHighTierFilterActive and (gen_val >= 10e6) then return true end; return false end
-function createLogCard(data) local id_str = tostring(data.id); local Card=Instance.new("Frame");Card.Name=id_str;Card.Size=UDim2.new(1,-4,0,55);Card.BackgroundColor3=COLORS.CARD;Card.BorderSizePixel=0;Card.Parent=i;local z=Instance.new("UICorner");z.CornerRadius=UDim.new(0,8);z.Parent=Card;local A=Instance.new("TextLabel");A.Text=data.name or"???";A.Font=Enum.Font.GothamBold;A.TextSize=15;A.TextColor3=COLORS.TEXT_MAIN;A.Size=UDim2.new(0.5,0,0.5,0);A.Position=UDim2.new(0.03,0,0.1,0);A.TextXAlignment=Enum.TextXAlignment.Left;A.BackgroundTransparency=1;A.Parent=Card;local B=Instance.new("TextLabel");B.Text="Gen: "..(data.gen or"0/s");B.Font=Enum.Font.GothamMedium;B.TextSize=13;B.TextColor3=COLORS.TEXT_DIM;B.Size=UDim2.new(0.5,0,0.4,0);B.Position=UDim2.new(0.03,0,0.55,0);B.TextXAlignment=Enum.TextXAlignment.Left;B.BackgroundTransparency=1;B.Parent=Card;local C=Instance.new("TextButton");C.Text="JOIN";C.Size=UDim2.new(0,80,0,32);C.Position=UDim2.new(1,-90,0.5,-16);C.BackgroundColor3=COLORS.ACCENT;C.TextColor3=COLORS.TEXT_MAIN;C.Font=Enum.Font.GothamBold;C.TextSize=13;C.Parent=Card;local D=Instance.new("UICorner");D.CornerRadius=UDim.new(0,6);D.Parent=C;C.MouseButton1Click:Connect(function()if data.placeId and data.jobId then TPS:TeleportToPlaceInstance(tonumber(data.placeId),data.jobId,Players.LocalPlayer)end end);Card.LayoutOrder=-tonumber(data.id or 0); return Card end
+function createLogCard(data) local id_str = tostring(data.id); local Card=Instance.new("Frame");Card.Name=id_str;Card.Size=UDim2.new(1,-4,0,50);Card.BackgroundColor3=COLORS.CARD;Card.BorderSizePixel=0;Card.Parent=i;local z=Instance.new("UICorner");z.CornerRadius=UDim.new(0,6);z.Parent=Card;local A=Instance.new("TextLabel");A.Text=data.name or"???";A.Font=Enum.Font.GothamBold;A.TextSize=14;A.TextColor3=COLORS.TEXT_MAIN;A.Size=UDim2.new(0.5,0,0.5,0);A.Position=UDim2.new(0.03,0,0.1,0);A.TextXAlignment=Enum.TextXAlignment.Left;A.BackgroundTransparency=1;A.Parent=Card;local B=Instance.new("TextLabel");B.Text="Gen: "..(data.gen or"0/s");B.Font=Enum.Font.Gotham;B.TextSize=12;B.TextColor3=COLORS.TEXT_DIM;B.Size=UDim2.new(0.5,0,0.4,0);B.Position=UDim2.new(0.03,0,0.55,0);B.TextXAlignment=Enum.TextXAlignment.Left;B.BackgroundTransparency=1;B.Parent=Card;local C=Instance.new("TextButton");C.Text="JOIN";C.Size=UDim2.new(0,80,0,30);C.Position=UDim2.new(1,-90,0.5,-15);C.BackgroundColor3=COLORS.ACCENT;C.TextColor3=COLORS.TEXT_MAIN;C.Font=Enum.Font.GothamBold;C.TextSize=12;C.Parent=Card;local D=Instance.new("UICorner");D.CornerRadius=UDim.new(0,6);D.Parent=C;C.MouseButton1Click:Connect(function()if data.placeId and data.jobId then TPS:TeleportToPlaceInstance(tonumber(data.placeId),data.jobId,Players.LocalPlayer)end end);Card.LayoutOrder=-tonumber(data.id or 0); return Card end
 local function updateDisplay() for id, card in pairs(i:GetChildren()) do if card:IsA("Frame") and PROCESSED_LOG_IDS[card.Name] then card.Visible = shouldShowLog(PROCESSED_LOG_IDS[card.Name]) end end end
 midTierBtn.MouseButton1Click:Connect(function() isMidTierFilterActive = not isMidTierFilterActive; updateFilterButtonVisuals(midTierBtn, midGradient, isMidTierFilterActive); saveSettings(); updateDisplay() end)
 highTierBtn.MouseButton1Click:Connect(function() isHighTierFilterActive = not isHighTierFilterActive; updateFilterButtonVisuals(highTierBtn, highGradient, isHighTierFilterActive); saveSettings(); updateDisplay() end)
 updateFilterButtonVisuals(midTierBtn, midGradient, isMidTierFilterActive); updateFilterButtonVisuals(highTierBtn, highGradient, isHighTierFilterActive);
 RunService.Heartbeat:Connect(function() midGradient.Rotation = (midGradient.Rotation + 2) % 360; highGradient.Rotation = (highGradient.Rotation + 2) % 360 end)
+
+-- 🔥 [НОВАЯ ФУНКЦИЯ: ТАБЛИЧКА НАД ГОЛОВОЙ]
+local function createOverhead(player)
+    if not player or not player.Character or not player.Character:FindFirstChild("Head") then return end
+    if player.Character.Head:FindFirstChild("CapyTag") then return end
+
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "CapyTag"
+    bb.Adornee = player.Character.Head
+    bb.Size = UDim2.new(0, 200, 0, 50)
+    bb.StudsOffset = Vector3.new(0, 3, 0)
+    bb.AlwaysOnTop = true
+    bb.Parent = player.Character.Head
+
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, 0, 1, 0)
+    frame.BackgroundTransparency = 1
+    frame.Parent = bb
+
+    local userLbl = Instance.new("TextLabel")
+    userLbl.Text = "👑 Capy User"
+    userLbl.Size = UDim2.new(1, 0, 0.4, 0)
+    userLbl.Position = UDim2.new(0, 0, 0.1, 0)
+    userLbl.BackgroundTransparency = 1
+    userLbl.TextColor3 = Color3.fromRGB(200, 200, 200)
+    userLbl.Font = Enum.Font.GothamBold
+    userLbl.TextSize = 14
+    userLbl.TextStrokeTransparency = 0.5
+    userLbl.Parent = frame
+
+    local scriptLbl = Instance.new("TextLabel")
+    scriptLbl.Text = "CapyNotifer"
+    scriptLbl.Size = UDim2.new(1, 0, 0.5, 0)
+    scriptLbl.Position = UDim2.new(0, 0, 0.5, 0)
+    scriptLbl.BackgroundTransparency = 1
+    scriptLbl.TextColor3 = Color3.new(1, 1, 1)
+    scriptLbl.Font = Enum.Font.GothamBlack
+    scriptLbl.TextSize = 18
+    scriptLbl.TextStrokeTransparency = 0
+    scriptLbl.Parent = frame
+
+    local grad = Instance.new("UIGradient")
+    grad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
+        ColorSequenceKeypoint.new(0.2, Color3.fromRGB(255, 165, 0)),
+        ColorSequenceKeypoint.new(0.4, Color3.fromRGB(255, 255, 0)),
+        ColorSequenceKeypoint.new(0.6, Color3.fromRGB(0, 255, 0)),
+        ColorSequenceKeypoint.new(0.8, Color3.fromRGB(0, 0, 255)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(238, 130, 238))
+    })
+    grad.Parent = scriptLbl
+
+    task.spawn(function()
+        while bb and bb.Parent do
+            grad.Rotation = (grad.Rotation + 3) % 360
+            task.wait(0.05)
+        end
+    end)
+end
+
+-- 🔥 [ФУНКЦИЯ ОТПРАВКИ "Я ТУТ"]
+task.spawn(function()
+    while task.wait(45) do -- Каждые 45 сек говорим API, что мы онлайн
+        local req = syn and syn.request or request or http_request
+        if req then
+            local data = { 
+                name = Players.LocalPlayer.Name, 
+                isUser = true, -- Метка юзера
+                jobId = game.JobId,
+                createdAt_unix = os.time() 
+            }
+            pcall(function() req({ Url = API_URL, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = Http:JSONEncode(data) }) end)
+        end
+    end
+end)
+
+-- Создаем табличку себе сразу
+createOverhead(Players.LocalPlayer)
 
 print("✅ CapyNotifer GUI Запущен.")
 task.spawn(function()
@@ -52,22 +121,25 @@ task.spawn(function()
         if not decoded_success or type(api_data) ~= "table" then continue end
         
         for _, item in ipairs(api_data) do
-            local id_str = tostring(item and item.id)
-            if id_str and not PROCESSED_LOG_IDS[id_str] then
-                PROCESSED_LOG_IDS[id_str] = item 
-                local card = createLogCard(item)
-                card.Visible = shouldShowLog(item)
-                
-                if card.Visible then sound:Play() end
-                
-                Debris:AddItem(card, LOG_LIFETIME) 
-                
-                if AUTO_JOIN_ENABLED and card.Visible then TPS:TeleportToPlaceInstance(tonumber(item.placeId), item.jobId, Players.LocalPlayer); task.wait(5) end
+            -- Если это ЮЗЕР
+            if item.isUser and item.jobId == game.JobId then
+                local plr = Players:FindFirstChild(item.name)
+                if plr then createOverhead(plr) end
+            
+            -- Если это ЛОГ (item.gen существует)
+            elseif item.gen and item.id then
+                local id_str = tostring(item.id)
+                if not PROCESSED_LOG_IDS[id_str] then
+                    PROCESSED_LOG_IDS[id_str] = item 
+                    local card = createLogCard(item)
+                    card.Visible = shouldShowLog(item)
+                    if card.Visible then sound:Play() end
+                    Debris:AddItem(card, LOG_LIFETIME) 
+                    if AUTO_JOIN_ENABLED and card.Visible then TPS:TeleportToPlaceInstance(tonumber(item.placeId), item.jobId, Players.LocalPlayer); task.wait(5) end
+                end
             end
         end
-        -- Удаление старых ID из памяти
-        for id, data in pairs(PROCESSED_LOG_IDS) do
-            if os.time() - (data.createdAt_unix or 0) > (LOG_LIFETIME + 5) then PROCESSED_LOG_IDS[id] = nil end
-        end
+        -- Удаление старых ID
+        for id, data in pairs(PROCESSED_LOG_IDS) do if os.time() - (data.createdAt_unix or 0) > (LOG_LIFETIME + 5) then PROCESSED_LOG_IDS[id] = nil end end
     end
 end)
