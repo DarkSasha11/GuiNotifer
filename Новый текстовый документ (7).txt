@@ -1,5 +1,5 @@
 -- ==============================================================================
--- 🧢 2. CAPYNOTIFER GUI (ФИНАЛ: ЛОГИ + ТАБЛИЧКИ ИГРОКОВ)
+-- 🧢 2. CAPYNOTIFER GUI (ФИНАЛ: ТАБЛИЧКА НА СЕБЕ + ЛОГИ)
 -- ==============================================================================
 local API_URL = "https://69804bc36570ee87d50eb123.mockapi.io/CAPYNOTIFER/CapyNotifer"
 local SAVE_FILE_NAME = "CapyNotifer_Settings.json" 
@@ -33,7 +33,7 @@ highTierBtn.MouseButton1Click:Connect(function() isHighTierFilterActive = not is
 updateFilterButtonVisuals(midTierBtn, midGradient, isMidTierFilterActive); updateFilterButtonVisuals(highTierBtn, highGradient, isHighTierFilterActive);
 RunService.Heartbeat:Connect(function() midGradient.Rotation = (midGradient.Rotation + 2) % 360; highGradient.Rotation = (highGradient.Rotation + 2) % 360 end)
 
--- 🔥 [НОВАЯ ФУНКЦИЯ: ТАБЛИЧКА НАД ГОЛОВОЙ]
+-- 🔥 [ФУНКЦИЯ СОЗДАНИЯ ТАБЛИЧКИ]
 local function createOverhead(player)
     if not player or not player.Character or not player.Character:FindFirstChild("Head") then return end
     if player.Character.Head:FindFirstChild("CapyTag") then return end
@@ -43,7 +43,7 @@ local function createOverhead(player)
     bb.Adornee = player.Character.Head
     bb.Size = UDim2.new(0, 200, 0, 50)
     bb.StudsOffset = Vector3.new(0, 3, 0)
-    bb.AlwaysOnTop = true
+    bb.AlwaysOnTop = true -- 🔥 ЧТОБЫ БЫЛО ВИДНО ЧЕРЕЗ СТЕНЫ
     bb.Parent = player.Character.Head
 
     local frame = Instance.new("Frame")
@@ -94,22 +94,21 @@ end
 
 -- 🔥 [ФУНКЦИЯ ОТПРАВКИ "Я ТУТ"]
 task.spawn(function()
-    while task.wait(45) do -- Каждые 45 сек говорим API, что мы онлайн
+    while task.wait(45) do
         local req = syn and syn.request or request or http_request
         if req then
-            local data = { 
-                name = Players.LocalPlayer.Name, 
-                isUser = true, -- Метка юзера
-                jobId = game.JobId,
-                createdAt_unix = os.time() 
-            }
+            local data = { name = Players.LocalPlayer.Name, isUser = true, jobId = game.JobId, createdAt_unix = os.time() }
             pcall(function() req({ Url = API_URL, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = Http:JSONEncode(data) }) end)
         end
     end
 end)
 
--- Создаем табличку себе сразу
-createOverhead(Players.LocalPlayer)
+-- 🔥 [ВЕШАЕМ ТАБЛИЧКУ НА СЕБЯ СРАЗУ]
+if Players.LocalPlayer.Character then createOverhead(Players.LocalPlayer) end
+Players.LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(1) -- Ждем пока загрузится голова
+    createOverhead(Players.LocalPlayer)
+end)
 
 print("✅ CapyNotifer GUI Запущен.")
 task.spawn(function()
@@ -121,12 +120,12 @@ task.spawn(function()
         if not decoded_success or type(api_data) ~= "table" then continue end
         
         for _, item in ipairs(api_data) do
-            -- Если это ЮЗЕР
+            -- Если это ЮЗЕР (видим других игроков)
             if item.isUser and item.jobId == game.JobId then
                 local plr = Players:FindFirstChild(item.name)
                 if plr then createOverhead(plr) end
             
-            -- Если это ЛОГ (item.gen существует)
+            -- Если это ЛОГ
             elseif item.gen and item.id then
                 local id_str = tostring(item.id)
                 if not PROCESSED_LOG_IDS[id_str] then
@@ -139,7 +138,8 @@ task.spawn(function()
                 end
             end
         end
-        -- Удаление старых ID
-        for id, data in pairs(PROCESSED_LOG_IDS) do if os.time() - (data.createdAt_unix or 0) > (LOG_LIFETIME + 5) then PROCESSED_LOG_IDS[id] = nil end end
+        for id, data in pairs(PROCESSED_LOG_IDS) do
+            if os.time() - (data.createdAt_unix or 0) > (LOG_LIFETIME + 5) then PROCESSED_LOG_IDS[id] = nil end
+        end
     end
 end)
