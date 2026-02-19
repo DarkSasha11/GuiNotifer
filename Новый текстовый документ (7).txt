@@ -1,117 +1,1600 @@
--- ==============================================================================
--- 🧢 2. CAPYNOTIFER GUI (TOGGLE "T" + ALL FEATURES)
--- ==============================================================================
-local API_URL = "https://69804bc36570ee87d50eb123.mockapi.io/CAPYNOTIFER/CapyNotifer"
-local SAVE_FILE_NAME = "CapyNotifer_Settings.json" 
-local Http, TPS, Players, CoreGui, TweenService, Debris, RunService, UserInputService = game:GetService("HttpService"), game:GetService("TeleportService"), game:GetService("Players"), game:GetService("CoreGui"), game:GetService("TweenService"), game:GetService("Debris"), game:GetService("RunService"), game:GetService("UserInputService")
-
-local AUTO_JOIN_ENABLED = false
-local PROCESSED_LOG_IDS = {} 
-local LOG_LIFETIME = 60 
-local USER_SIGNAL_INTERVAL = 3 
-local RETRY_COUNT = 1 
-local isMidTierFilterActive, isHighTierFilterActive
-
-local function saveSettings() local settings = { mid_active = isMidTierFilterActive, high_active = isHighTierFilterActive, retries = RETRY_COUNT }; writefile(SAVE_FILE_NAME, Http:JSONEncode(settings)) end
-local function loadSettings() if isfile(SAVE_FILE_NAME) then local success, data = pcall(function() return Http:JSONDecode(readfile(SAVE_FILE_NAME)) end) if success and type(data) == "table" then isMidTierFilterActive = data.mid_active; isHighTierFilterActive = data.high_active; RETRY_COUNT = data.retries or 1; return end end; isMidTierFilterActive = true; isHighTierFilterActive = true; end
-loadSettings()
-
-TPS.TeleportInitFailed:Connect(function() warn("⚠️ Auto-Retry...") end)
-
-local COLORS = { BG=Color3.fromRGB(18,18,24), CARD=Color3.fromRGB(36, 38, 50), CARD_INACTIVE=Color3.fromRGB(26,28,38), ACCENT=Color3.fromRGB(114,137,218), TEXT_MAIN=Color3.new(1,1,1), TEXT_DIM=Color3.fromRGB(140,145,170), GREEN=Color3.fromRGB(65,168,95), SHIMMER_YELLOW=Color3.fromRGB(255,230,0), SHIMMER_RED=Color3.fromRGB(255,0,0) }
-local ScreenGui = Instance.new("ScreenGui"); ScreenGui.Name = "CapyNotiferUI_FINAL_TOGGLE"; if pcall(function() ScreenGui.Parent = CoreGui end) then else ScreenGui.Parent = Players.LocalPlayer.PlayerGui end
-local MainFrame=Instance.new("Frame");MainFrame.Name="MainFrame";MainFrame.Size=UDim2.new(0,500,0,450);MainFrame.Position=UDim2.new(0.5,-250,0.5,-225);MainFrame.BackgroundColor3=COLORS.BG;MainFrame.BorderSizePixel=0;MainFrame.Parent=ScreenGui;local a=Instance.new("UICorner");a.CornerRadius=UDim.new(0,12);a.Parent=MainFrame;local b=Instance.new("UIStroke");b.Color=Color3.fromRGB(41,46,66);b.Thickness=2;b.Parent=MainFrame;local c=Instance.new("Frame");c.Size=UDim2.new(1,0,0,50);c.BackgroundTransparency=1;c.Parent=MainFrame;local d=Instance.new("TextLabel");d.Text="CapyNotifer";d.Font=Enum.Font.GothamBlack;d.TextSize=22;d.TextColor3=COLORS.TEXT_MAIN;d.Size=UDim2.new(0,200,1,0);d.Position=UDim2.new(0,20,0,0);d.TextXAlignment=Enum.TextXAlignment.Left;d.BackgroundTransparency=1;d.Parent=c;local e=Instance.new("TextButton");e.Text="×";e.TextColor3=COLORS.TEXT_DIM;e.BackgroundTransparency=1;e.TextSize=24;e.Size=UDim2.new(0,40,0,40);e.Position=UDim2.new(1,-45,0,5);e.Parent=c;e.MouseButton1Click:Connect(function()ScreenGui.Enabled = not ScreenGui.Enabled end); -- Кнопка Х теперь тоже скрывает
-local f=Instance.new("TextLabel");f.Text="ACTIVE SERVERS";f.Font=Enum.Font.GothamBold;f.TextSize=12;f.TextColor3=COLORS.TEXT_DIM;f.Size=UDim2.new(0,150,0,20);f.Position=UDim2.new(0,20,0,55);f.TextXAlignment=Enum.TextXAlignment.Left;f.BackgroundTransparency=1;f.Parent=MainFrame;local ScrollContainer=Instance.new("Frame");ScrollContainer.Size=UDim2.new(1,-40,1,-140);ScrollContainer.Position=UDim2.new(0,20,0,80);ScrollContainer.BackgroundColor3=Color3.fromRGB(13,13,17);ScrollContainer.BorderSizePixel=0;ScrollContainer.Parent=MainFrame;local h=Instance.new("UICorner");h.CornerRadius=UDim.new(0,8);h.Parent=ScrollContainer;local i=Instance.new("ScrollingFrame");i.Name="Scroll";i.Size=UDim2.new(1,-10,1,-10);i.Position=UDim2.new(0,5,0,5);i.BackgroundTransparency=1;i.ScrollBarThickness=4;i.ScrollBarImageColor3=COLORS.ACCENT;i.Parent=ScrollContainer;local j=Instance.new("UIListLayout");j.Padding=UDim.new(0,8);j.SortOrder=Enum.SortOrder.LayoutOrder;j.Parent=i;local BottomPanel=Instance.new("Frame");BottomPanel.Size=UDim2.new(1,0,0,60);BottomPanel.Position=UDim2.new(0,0,1,-60);BottomPanel.BackgroundTransparency=1;BottomPanel.Parent=MainFrame;local l=Instance.new("TextButton");l.Name="AutoJoinBtn";l.Size=UDim2.new(0.5,-10,0,40);l.Position=UDim2.new(0,20,0,10);l.BackgroundColor3=Color3.fromRGB(41,46,66);l.Text="AUTO JOIN: OFF";l.Font=Enum.Font.GothamBold;l.TextSize=14;l.TextColor3=COLORS.TEXT_MAIN;l.AutoButtonColor=false;l.Parent=BottomPanel;local m=Instance.new("UICorner");m.CornerRadius=UDim.new(0,8);m.Parent=l;l.MouseButton1Click:Connect(function()AUTO_JOIN_ENABLED=not AUTO_JOIN_ENABLED;local n=AUTO_JOIN_ENABLED;l.Text="AUTO JOIN: "..(n and"ON"or"OFF");TweenService:Create(l,TweenInfo.new(0.3),{BackgroundColor3=n and COLORS.GREEN or Color3.fromRGB(41,46,66)}):Play()end);local p,q,r,s;local function t(u)local v=u.Position-r;MainFrame.Position=UDim2.new(s.X.Scale,s.X.Offset+v.X,s.Y.Scale,s.Y.Offset+v.Y)end;c.InputBegan:Connect(function(w)if w.UserInputType==Enum.UserInputType.MouseButton1 then p=true;r=w.Position;s=MainFrame.Position;w.Changed:Connect(function()if w.UserInputState==Enum.UserInputState.End then p=false end end)end end);c.InputChanged:Connect(function(x)if x.UserInputType==Enum.UserInputType.MouseMovement then q=x end end);UserInputService.InputChanged:Connect(function(y)if y==q and p then t(y)end end)
-
--- 🔥 [БИНД НА КЛАВИШУ "T"]
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if not gameProcessed and input.KeyCode == Enum.KeyCode.T then
-        ScreenGui.Enabled = not ScreenGui.Enabled
+-- https://discord.gg/MT6BXdH9q
+local function safeCall(func, ...)
+    local start = tick()
+    local success, result = pcall(func, ...)
+    local duration = tick() - start
+    
+    if duration > 0.08 then -- Faster threshold
+        warn("Slow function:", debug.info(func, "n") or "anonymous", "took", duration, "seconds")
     end
-end)
+    
+    return success, result
+end
 
-local sound=Instance.new("Sound");sound.SoundId="rbxassetid://5106196231";sound.Volume=5;sound.Parent=ScreenGui;
-local filterContainer=Instance.new("Frame");filterContainer.Size=UDim2.new(0,220,0,30);filterContainer.Position=UDim2.new(1,-240,0,49);filterContainer.BackgroundTransparency=1;filterContainer.Parent=MainFrame;local filterLayout=Instance.new("UIListLayout");filterLayout.FillDirection=Enum.FillDirection.Horizontal;filterLayout.HorizontalAlignment=Enum.HorizontalAlignment.Right;filterLayout.VerticalAlignment=Enum.VerticalAlignment.Center;filterLayout.Padding=UDim.new(0,10);filterLayout.Parent=filterContainer;
-local function createFilterButton(text, shimmerColor) local button = Instance.new("TextButton"); button.Size = UDim2.new(0, 90, 0, 28); button.Text = text; button.Font = Enum.Font.GothamBold; button.TextSize = 12; button.Parent = filterContainer; local corner = Instance.new("UICorner"); corner.CornerRadius = UDim.new(0, 6); corner.Parent = button; local stroke = Instance.new("UIStroke"); stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border; stroke.Thickness = 1.5; stroke.Parent = button; local gradient = Instance.new("UIGradient"); gradient.Color = ColorSequence.new({ColorSequenceKeypoint.new(0, shimmerColor), ColorSequenceKeypoint.new(0.5, Color3.new(1,1,1)), ColorSequenceKeypoint.new(1, shimmerColor)}); gradient.Rotation = 0; gradient.Parent = stroke; return button, gradient end
-local midTierBtn, midGradient = createFilterButton("1m-9m", COLORS.SHIMMER_YELLOW);
-local highTierBtn, highGradient = createFilterButton("10m+", COLORS.SHIMMER_RED);
-local function updateFilterButtonVisuals(button, gradient, isActive) gradient.Enabled = isActive; local targetBgColor = isActive and COLORS.CARD or COLORS.CARD_INACTIVE; local targetTextColor = isActive and COLORS.TEXT_MAIN or COLORS.TEXT_DIM; TweenService:Create(button, TweenInfo.new(0.2), {BackgroundColor3 = targetBgColor, TextColor3 = targetTextColor}):Play() end
-function shouldShowLog(item) if not item or not item.gen_value then return false end; local gen_val = tonumber(item.gen_value) or 0; if isMidTierFilterActive and (gen_val >= 1e6 and gen_val < 10e6) then return true end; if isHighTierFilterActive and (gen_val >= 10e6) then return true end; return false end
-local retryLabel = Instance.new("TextLabel"); retryLabel.Text = "Retries:"; retryLabel.Size = UDim2.new(0, 50, 0, 40); retryLabel.Position = UDim2.new(0.5, 20, 0, 10); retryLabel.BackgroundTransparency = 1; retryLabel.TextColor3 = COLORS.TEXT_DIM; retryLabel.Font = Enum.Font.GothamBold; retryLabel.TextSize = 14; retryLabel.Parent = BottomPanel
-local retryBox = Instance.new("TextBox"); retryBox.Text = tostring(RETRY_COUNT); retryBox.Size = UDim2.new(0, 40, 0, 40); retryBox.Position = UDim2.new(0.5, 75, 0, 10); retryBox.BackgroundColor3 = Color3.fromRGB(13,13,17); retryBox.TextColor3 = COLORS.TEXT_MAIN; retryBox.Font = Enum.Font.GothamBold; retryBox.TextSize = 14; retryBox.Parent = BottomPanel; local rCorner = Instance.new("UICorner"); rCorner.CornerRadius = UDim.new(0, 8); rCorner.Parent = retryBox
-retryBox.FocusLost:Connect(function() local num = tonumber(retryBox.Text); if num then RETRY_COUNT = math.clamp(num, 1, 50); saveSettings() else retryBox.Text = tostring(RETRY_COUNT) end end)
+-- Cleanup previous execution
+if _G.MySkyCleanup then
+    pcall(_G.MySkyCleanup)
+end
 
-local function attemptJoin(placeId, jobId)
+_G.MySkyCleanup = function()
+    if _G.MySkyConnections then
+        for _, conn in ipairs(_G.MySkyConnections) do
+            pcall(function() conn:Disconnect() end)
+        end
+        _G.MySkyConnections = {}
+    end
+    
+    -- Clean up parts
+    for _, part in ipairs(workspace:GetChildren()) do
+        if part.Name:find("myskyp") or part.Name:find("Cosmic") then
+            pcall(function() part:Destroy() end)
+        end
+    end
+    
+    -- Clean up GUI
+    local coreGui = game:GetService("CoreGui")
+    local existingGui = coreGui:FindFirstChild("SemiInstaSteal")
+    if existingGui then
+        pcall(function() existingGui:Destroy() end)
+    end
+end
+
+-- Execute cleanup on script restart
+pcall(_G.MySkyCleanup)
+
+-- // ------------------------------------------------ //
+-- //                  MAIN SCRIPT                     //
+-- // ------------------------------------------------ //
+
+-- Load services in background to prevent freezing
+local Services = {}
+local servicePromises = {}
+
+-- Function to get services asynchronously
+local function getService(serviceName)
+    if Services[serviceName] then
+        return Services[serviceName]
+    end
+    
+    -- Load service in background
+    if not servicePromises[serviceName] then
+        servicePromises[serviceName] = task.spawn(function()
+            Services[serviceName] = game:GetService(serviceName)
+            servicePromises[serviceName] = nil
+        end)
+    end
+    
+    -- Wait for service if needed immediately
+    while not Services[serviceName] do
+        task.wait()
+    end
+    
+    return Services[serviceName]
+end
+
+-- Load critical services first without freezing
+local Players = getService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- Connection storage
+local connections = {}
+_G.MySkyConnections = connections
+
+print("Script loaded successfully for user:", LocalPlayer.Name)
+
+-- Prevent duplicate execution
+if _G.MyskypInstaSteal then 
+    pcall(_G.MySkyCleanup)
+    task.wait(0.1)
+end
+_G.MyskypInstaSteal = true
+
+-- Configuration constants - Define positions for BOTH bases
+local TP_POSITIONS = {
+    BASE1 = {
+        INFO_POS = CFrame.new(334.76, 55.334, 99.40),  -- Base 1 standing position
+        TELEPORT_POS = CFrame.new(-352.98, -7.30, 74.3),    -- Base 1 teleport position
+        STAND_HERE_PART = CFrame.new(-334.76, -5.334, 99.40) * CFrame.new(0, 2.6, 0)
+    },
+    BASE2 = {
+        INFO_POS = CFrame.new(334.76, 55.334, 19.17),    -- Base 2 standing position
+        TELEPORT_POS = CFrame.new(-352.98, -7.30, 45.76), -- Base 2 teleport position
+        STAND_HERE_PART = CFrame.new(-336.41, -5.34, 19.20) * CFrame.new(0, 2.6, 0)
+    }
+}
+
+local TP_DELAY = 0.15 -- FASTER: Was 0.2
+
+-- State variables
+local TPSysEnabled = true
+local DesyncActive = false
+
+-- Performance variables
+local lastTeleportTime = 0
+local TELEPORT_COOLDOWN = 0.8 -- FASTER: Was 1.0
+local lastMarkerUpdate = 0
+local MARKER_UPDATE_INTERVAL = 0.4 -- FASTER: Was 0.5
+
+-- Device detection
+local UserInputService = getService("UserInputService")
+local TweenService = getService("TweenService")
+local IS_MOBILE = UserInputService.TouchEnabled
+local IS_PC = not IS_MOBILE
+
+print("Device detection:", IS_MOBILE and "MOBILE" or "PC")
+
+-- Utility functions
+local function cleanup()
+    for _, conn in ipairs(connections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    connections = {}
+end
+
+-- ============================================================
+-- ORIGINAL TELEPORT PATH FUNCTION EXACTLY AS YOU HAD IT
+-- ============================================================
+local function TeleportPath(targetCFrame)
+    -- Cooldown check
+    if tick() - lastTeleportTime < TELEPORT_COOLDOWN then 
+        return 
+    end
+    lastTeleportTime = tick()
+    
+    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then 
+        return 
+    end
+    
+    local hrp = LocalPlayer.Character.HumanoidRootPart
+    
+    -- Distance check for performance
+    local distance = (hrp.Position - targetCFrame.Position).Magnitude
+    if distance > 1000 then
+        warn("Target too far for pathfinding:", distance)
+        return
+    end
+    
+    if distance < 50 then
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        LocalPlayer.Character:PivotTo(targetCFrame)
+        task.wait(TP_DELAY)
+        return
+    end
+
+    -- Run pathfinding in background task to prevent freezing
     task.spawn(function()
-        for i = 1, RETRY_COUNT do
-            TPS:TeleportToPlaceInstance(tonumber(placeId), jobId, Players.LocalPlayer)
-            task.wait(3) 
+        local PathfindingService = getService("PathfindingService")
+        local success, path = pcall(function()
+            local path = PathfindingService:CreatePath({ 
+                AgentCanJump = true, 
+                AgentRadius = 3,
+                AgentHeight = 5,
+                AgentCanClimb = false
+            })
+            path:ComputeAsync(hrp.Position, targetCFrame.Position)
+            return path
+        end)
+        
+        if not success or not path then return end
+        
+        if path.Status == Enum.PathStatus.Success then
+            local waypoints = path:GetWaypoints()
+            local stepCount = math.min(4, #waypoints)
+            
+            for i = 1, stepCount do
+                -- Check if character still exists
+                if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    break
+                end
+                
+                local frac = i / stepCount
+                local idx = math.clamp(math.floor(frac * #waypoints) + 1, 1, #waypoints)
+                hrp.AssemblyLinearVelocity = Vector3.zero
+                LocalPlayer.Character:PivotTo(CFrame.new(waypoints[idx].Position + Vector3.new(0, 2.5, 0)))
+                task.wait(0.08)
+            end
+        end
+
+        -- Final teleport with character check
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            LocalPlayer.Character:PivotTo(targetCFrame)
+            task.wait(TP_DELAY)
         end
     end)
 end
 
-function createLogCard(data) local id_str = tostring(data.id); local Card=Instance.new("Frame");Card.Name=id_str;Card.Size=UDim2.new(1,-4,0,55);Card.BackgroundColor3=COLORS.CARD;Card.BorderSizePixel=0;Card.Parent=i;local z=Instance.new("UICorner");z.CornerRadius=UDim.new(0,8);z.Parent=Card;local A=Instance.new("TextLabel");A.Text=data.name or"???";A.Font=Enum.Font.GothamBold;A.TextSize=15;A.TextColor3=COLORS.TEXT_MAIN;A.Size=UDim2.new(0.5,0,0.5,0);A.Position=UDim2.new(0.03,0,0.1,0);A.TextXAlignment=Enum.TextXAlignment.Left;A.BackgroundTransparency=1;A.Parent=Card;local B=Instance.new("TextLabel");B.Text="Gen: "..(data.gen or"0/s");B.Font=Enum.Font.GothamMedium;B.TextSize=13;B.TextColor3=COLORS.TEXT_DIM;B.Size=UDim2.new(0.5,0,0.4,0);B.Position=UDim2.new(0.03,0,0.55,0);B.TextXAlignment=Enum.TextXAlignment.Left;B.BackgroundTransparency=1;B.Parent=Card;local C=Instance.new("TextButton");C.Text="JOIN";C.Size=UDim2.new(0,80,0,32);C.Position=UDim2.new(1,-90,0.5,-16);C.BackgroundColor3=COLORS.ACCENT;C.TextColor3=COLORS.TEXT_MAIN;C.Font=Enum.Font.GothamBold;C.TextSize=13;C.Parent=Card;local D=Instance.new("UICorner");D.CornerRadius=UDim.new(0,6);D.Parent=C;
-    C.MouseButton1Click:Connect(function() if data.placeId and data.jobId then attemptJoin(data.placeId, data.jobId) end end);
-    Card.LayoutOrder=-tonumber(data.id or 0); return Card 
-end
-
-local function updateDisplay() for _, card in pairs(i:GetChildren()) do if card:IsA("Frame") and PROCESSED_LOG_IDS[card.Name] then card.Visible = shouldShowLog(PROCESSED_LOG_IDS[card.Name]) end end end
-midTierBtn.MouseButton1Click:Connect(function() isMidTierFilterActive = not isMidTierFilterActive; updateFilterButtonVisuals(midTierBtn, midGradient, isMidTierFilterActive); saveSettings(); updateDisplay() end)
-highTierBtn.MouseButton1Click:Connect(function() isHighTierFilterActive = not isHighTierFilterActive; updateFilterButtonVisuals(highTierBtn, highGradient, isHighTierFilterActive); saveSettings(); updateDisplay() end)
-updateFilterButtonVisuals(midTierBtn, midGradient, isMidTierFilterActive); updateFilterButtonVisuals(highTierBtn, highGradient, isHighTierFilterActive);
-RunService.Heartbeat:Connect(function() midGradient.Rotation = (midGradient.Rotation + 2) % 360; highGradient.Rotation = (highGradient.Rotation + 2) % 360 end)
-
-local function createOverhead(player)
-    if not player or not player.Character or not player.Character:FindFirstChild("Head") then return end
-    if player.Character.Head:FindFirstChild("CapyTag") then return end
-    local bb = Instance.new("BillboardGui"); bb.Name = "CapyTag"; bb.Adornee = player.Character.Head; bb.Size = UDim2.new(0, 150, 0, 40); bb.StudsOffset = Vector3.new(0, 2.5, 0); bb.AlwaysOnTop = true; bb.Parent = player.Character.Head
-    local frame = Instance.new("Frame"); frame.Size = UDim2.new(1, 0, 1, 0); frame.BackgroundColor3 = Color3.fromRGB(0, 0, 0); frame.BackgroundTransparency = 0.4; frame.Parent = bb
-    local corner = Instance.new("UICorner"); corner.CornerRadius = UDim.new(0, 8); corner.Parent = frame
-    local stroke = Instance.new("UIStroke"); stroke.Color = Color3.fromRGB(80, 100, 255); stroke.Thickness = 2; stroke.Parent = frame
-    local textLbl = Instance.new("TextLabel"); textLbl.Text = "User CapyNotifer"; textLbl.Size = UDim2.new(1, 0, 1, 0); textLbl.BackgroundTransparency = 1; textLbl.TextColor3 = Color3.new(1, 1, 1); textLbl.Font = Enum.Font.GothamBold; textLbl.TextSize = 16; textLbl.Parent = frame
-end
-
-task.spawn(function()
-    while task.wait(USER_SIGNAL_INTERVAL) do
-        local req = syn and syn.request or request or http_request
-        if req then
-            local data = { name = Players.LocalPlayer.Name, isUser = true, jobId = game.JobId, createdAt_unix = os.time() }
-            pcall(function() req({ Url = API_URL, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = Http:JSONEncode(data) }) end)
-        end
+-- Determine which base the player is at
+local function getCurrentBasePosition()
+    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        return TP_POSITIONS.BASE1.INFO_POS
     end
+    
+    local hrp = LocalPlayer.Character.HumanoidRootPart
+    local currentPos = hrp.Position
+    
+    -- Calculate distances to both bases
+    local distToBase1 = (currentPos - TP_POSITIONS.BASE1.INFO_POS.Position).Magnitude
+    local distToBase2 = (currentPos - TP_POSITIONS.BASE2.INFO_POS.Position).Magnitude
+    
+    -- Determine which base is closer
+    if distToBase1 < distToBase2 then
+        return TP_POSITIONS.BASE1.INFO_POS
+    else
+        return TP_POSITIONS.BASE2.INFO_POS
+    end
+end
+
+-- Create marker with caching
+local function CreateMarker()
+    local currentBasePos = getCurrentBasePosition()
+    local markerPos = currentBasePos * CFrame.new(0, -3.2, 0)
+    
+    local part = workspace:FindFirstChild("myskypBest") or Instance.new("Part")
+    part.Name = "myskypBest"
+    part.Size = Vector3.new(1, 1, 1)
+    part.CFrame = markerPos
+    part.Anchored = true
+    part.CanCollide = false
+    part.Material = Enum.Material.Neon
+    part.Color = Color3.fromRGB(0, 255, 255)
+    part.Transparency = 0.3
+    part.Parent = workspace
+
+    -- Billboard GUI (empty - no text)
+    if not part:FindFirstChild("MyskypBillboard") then
+        local gui = Instance.new("BillboardGui")
+        gui.Name = "MyskypBillboard"
+        gui.AlwaysOnTop = true
+        gui.Size = UDim2.new(0, 200, 0, 50)
+        gui.ExtentsOffset = Vector3.new(0, 3, 0)
+        gui.Parent = part
+        
+        local label = Instance.new("TextLabel")
+        label.Name = "Text"
+        label.BackgroundTransparency = 1
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.Font = Enum.Font.GothamBold
+        label.TextSize = 18
+        label.TextColor3 = Color3.new(1, 1, 1)
+        label.Text = "" -- Empty text
+        label.Parent = gui
+    end
+    
+    return part
+end
+
+local Marker = CreateMarker()
+
+-- Create cosmic indicators in workspace for both bases
+local function createCosmicIndicator(name, position, color, text)
+    local part = Instance.new("Part")
+    part.Name = name
+    part.Size = Vector3.new(3.8, 0.3, 3.8)
+    part.Material = Enum.Material.Plastic
+    part.Color = color
+    part.Transparency = 0.57
+    part.Anchored = true
+    part.CanCollide = false
+    part.Position = position
+    part.Parent = workspace
+
+    -- Billboard
+    local billboard = Instance.new("BillboardGui")
+    billboard.Size = UDim2.new(0, 200, 0, 50)
+    billboard.StudsOffset = Vector3.new(0, 4, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = part
+
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.Text = text
+    textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    textLabel.TextStrokeTransparency = 0.3
+    textLabel.TextStrokeColor3 = color
+    textLabel.Font = Enum.Font.GothamBold
+    textLabel.TextSize = 18
+    textLabel.Parent = billboard
+
+    return part
+end
+
+-- Create cosmic indicators asynchronously to prevent freeze
+task.spawn(function()
+    -- Base 1 indicators
+    createCosmicIndicator(
+        "CosmicStandHereBase1",
+        Vector3.new(-334.84, -5.40, 101.02),
+        Color3.fromRGB(39, 39, 39),
+        " STAND HERE (BASE 1) "
+    )
+
+    createCosmicIndicator(
+        "CosmicTeleportHereBase1",
+        Vector3.new(-352.98, -7.30, 74.3),
+        Color3.fromRGB(39, 39, 39),
+        " TELEPORT HERE (BASE 1) "
+    )
+
+    -- Base 2 indicators
+    createCosmicIndicator(
+        "CosmicStandHereBase2",
+        Vector3.new(-334.84, -5.40, 19.20),
+        Color3.fromRGB(39, 39, 39),
+        " STAND HERE (BASE 2) "
+    )
+
+    createCosmicIndicator(
+        "CosmicTeleportHereBase2",
+        Vector3.new(-352.98, -7.30, 45.76),
+        Color3.fromRGB(39, 39, 39),
+        " TELEPORT HERE (BASE 2) "
+    )
 end)
 
-if Players.LocalPlayer.Character then createOverhead(Players.LocalPlayer) end
-Players.LocalPlayer.CharacterAdded:Connect(function() task.wait(1); createOverhead(Players.LocalPlayer) end)
+-- ============================================================
+-- STEAL PROMPT DETECTION (ТОЛЬКО НА "Steal" ПРОМПТ КАК БЫЛО)
+-- ============================================================
 
-print("✅ CapyNotifer GUI Запущен.")
-task.spawn(function()
-    while task.wait(1.5) do
-        local url_with_cache = API_URL .. "?nocache=" .. tick()
-        local success, response_body = pcall(game.HttpGet, game, url_with_cache, true)
+local function initializeEventConnections()
+    local ProximityPromptService = getService("ProximityPromptService")
+    local RunService = getService("RunService")
+    
+    -- Просто как было - телепорт при Steal промпте
+    local promptConn = ProximityPromptService.PromptButtonHoldEnded:Connect(function(prompt, who)
+        if who ~= LocalPlayer then return end
+        if prompt.Name ~= "Steal" and prompt.ActionText ~= "Steal" and prompt.ObjectText ~= "Steal" then return end
         
-        if not success then continue end
-        local decoded_success, api_data = pcall(Http.JSONDecode, Http, response_body)
-        if not decoded_success or type(api_data) ~= "table" then continue end
+        warn("STEAL DETECTED")
         
-        for _, item in ipairs(api_data) do
-            if item.isUser and item.jobId == game.JobId then
-                local plr = Players:FindFirstChild(item.name)
-                if plr then createOverhead(plr) end
-            elseif item.gen and item.id then
-                local id_str = tostring(item.id)
-                if not PROCESSED_LOG_IDS[id_str] then
-                    PROCESSED_LOG_IDS[id_str] = item 
-                    local card = createLogCard(item)
-                    card.Visible = shouldShowLog(item)
-                    
-                    if card.Visible then sound:Play() end 
-                    
-                    Debris:AddItem(card, LOG_LIFETIME) 
-                    if AUTO_JOIN_ENABLED and card.Visible then attemptJoin(item.placeId, item.jobId) end
+        if not TPSysEnabled then
+            warn("TP System OFF")
+            return
+        end
+        
+        local character = LocalPlayer.Character
+        if not character then return end
+        
+        local hrp = character:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+        
+        -- Пытаемся экипировать Flying Carpet если есть
+        local backpack = LocalPlayer:FindFirstChild("Backpack")
+        if backpack then
+            local carpet = backpack:FindFirstChild("Flying Carpet")
+            if carpet and character:FindFirstChild("Humanoid") then
+                character.Humanoid:EquipTool(carpet)
+                task.wait(0.1)
+            end
+        end
+        
+        -- Определяем на какой базе мы и телепортируем на ТУ ЖЕ базу
+        local currentBasePos = getCurrentBasePosition()
+        
+        if currentBasePos == TP_POSITIONS.BASE1.INFO_POS then
+            hrp.CFrame = TP_POSITIONS.BASE1.TELEPORT_POS
+            print("TPED To Base 1")
+        else
+            hrp.CFrame = TP_POSITIONS.BASE2.TELEPORT_POS
+            print("TPED To Base 2")
+        end
+    end)
+    table.insert(connections, promptConn)
+    
+    -- Marker update with throttling
+    local heartbeatConn = RunService.Heartbeat:Connect(function(deltaTime)
+        lastMarkerUpdate = lastMarkerUpdate + deltaTime
+        if lastMarkerUpdate < MARKER_UPDATE_INTERVAL then return end
+        lastMarkerUpdate = 0
+        
+        local character = LocalPlayer.Character
+        if not character then return end
+        
+        local hrp = character:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+        
+        -- Update marker to current base's standing position
+        local currentBasePos = getCurrentBasePosition()
+        local markerPos = currentBasePos * CFrame.new(0, -3.2, 0)
+        
+        -- Update marker position
+        if Marker and Marker.Parent then
+            Marker.CFrame = markerPos
+            
+            -- Check distance to current standing position
+            local dist = (hrp.Position - currentBasePos.Position).Magnitude
+            Marker.Color = dist < 7 and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(255, 50, 50)
+        end
+    end)
+    table.insert(connections, heartbeatConn)
+    
+    print("Event connections initialized")
+end
+
+-- Initialize connections
+task.spawn(initializeEventConnections)
+
+-- ============================================================
+-- OPTIMIZED ANTI-KICK SYSTEM (NO FREEZING WHEN PICKING UP ITEMS)
+-- ============================================================
+
+local KEYWORD = "You stole"
+local KICK_MESSAGE = "EZZ"
+
+local function hasKeyword(text)
+    return typeof(text) == "string" and text:lower():find(KEYWORD, 1, true) ~= nil
+end
+
+local function watchObject(obj)
+    if not (obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox")) then return end
+    
+    -- Only check if it's visible and has text
+    if obj.Visible and obj.Text and hasKeyword(obj.Text) then
+        task.spawn(function()
+            pcall(function() LocalPlayer:Kick(KICK_MESSAGE) end)
+        end)
+        return
+    end
+    
+    -- Only connect to text changes if object is visible
+    if obj.Visible then
+        local conn = obj:GetPropertyChangedSignal("Text"):Connect(function()
+            if hasKeyword(obj.Text) then
+                task.spawn(function()
+                    pcall(function() LocalPlayer:Kick(KICK_MESSAGE) end)
+                end)
+            end
+        end)
+        table.insert(connections, conn)
+    end
+end
+
+-- Optimized scanning with debouncing
+local lastScanTime = 0
+local SCAN_COOLDOWN = 0.5 -- Half second between scans
+local MAX_SCAN_TIME = 0.016 -- 60 FPS threshold (16ms)
+
+local function optimizedScanDescendants(parent)
+    local currentTime = tick()
+    if currentTime - lastScanTime < SCAN_COOLDOWN then return end
+    
+    local startTime = tick()
+    if tick() - startTime > MAX_SCAN_TIME then
+        warn("Scan would take too long, skipping...")
+        return
+    end
+    
+    lastScanTime = currentTime
+    
+    -- Run in background to prevent freezing
+    task.spawn(function()
+        local textObjects = {}
+        local batchSize = 15
+        
+        -- Quick first pass: collect only visible text objects
+        for _, obj in ipairs(parent:GetDescendants()) do
+            if tick() - startTime > MAX_SCAN_TIME then
+                warn("Scan timeout - stopping early")
+                break
+            end
+            
+            if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+                if obj.Visible and obj.Text then
+                    table.insert(textObjects, obj)
                 end
             end
         end
-        for id, data in pairs(PROCESSED_LOG_IDS) do if os.time() - (data.createdAt_unix or 0) > (LOG_LIFETIME + 5) then PROCESSED_LOG_IDS[id] = nil end end
+        
+        -- Process in smaller batches with longer yields
+        for i = 1, #textObjects, batchSize do
+            local endIdx = math.min(i + batchSize - 1, #textObjects)
+            for j = i, endIdx do
+                watchObject(textObjects[j])
+            end
+            task.wait(0.05) -- Longer yield to prevent freezing
+        end
+        
+        warn("Scan completed in " .. (tick() - startTime) .. " seconds, objects: " .. #textObjects)
+    end)
+end
+
+-- Debounced version of watchObject for ChildAdded events
+local childAddedDebounce = false
+local function debouncedWatchObject(obj)
+    if not childAddedDebounce then
+        childAddedDebounce = true
+        watchObject(obj)
+        childAddedDebounce = false
+    end
+end
+
+-- Anti-kick system in background
+task.spawn(function()
+    local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+    
+    -- Initial scan with delay to prevent startup freeze
+    task.wait(2) -- Wait for game to load
+    optimizedScanDescendants(PlayerGui)
+    
+    -- Optimized ChildAdded event
+    local childAddedConn = PlayerGui.ChildAdded:Connect(function(gui)
+        task.wait(0.1) -- Small delay to prevent rapid scanning
+        if gui:IsA("ScreenGui") then
+            optimizedScanDescendants(gui)
+        else
+            debouncedWatchObject(gui)
+        end
+    end)
+    table.insert(connections, childAddedConn)
+    
+    -- Optimized DescendantAdded event
+    local descendantAddedConn = PlayerGui.DescendantAdded:Connect(debouncedWatchObject)
+    table.insert(connections, descendantAddedConn)
+end)
+
+-- Auto-cleanup on player leaving
+task.spawn(function()
+    local playerLeavingConn = Players.PlayerRemoving:Connect(function(player)
+        if player == LocalPlayer then
+            cleanup()
+            _G.MyskypInstaSteal = false
+            pcall(_G.MySkyCleanup)
+        end
+    end)
+    table.insert(connections, playerLeavingConn)
+end)
+
+-- ============================================================
+-- DESYNC FFLAG SYSTEM (FROM THE SHARED CODE)
+-- ============================================================
+
+local FFlags = {
+    GameNetPVHeaderRotationalVelocityZeroCutoffExponent = -5000,
+    LargeReplicatorWrite5 = true,
+    LargeReplicatorEnabled9 = true,
+    AngularVelociryLimit = 360,
+    TimestepArbiterVelocityCriteriaThresholdTwoDt = 2147483646,
+    S2PhysicsSenderRate = 15000,
+    DisableDPIScale = true,
+    MaxDataPacketPerSend = 2147483647,
+    PhysicsSenderMaxBandwidthBps = 20000,
+    TimestepArbiterHumanoidLinearVelThreshold = 21,
+    MaxMissedWorldStepsRemembered = -2147483648,
+    PlayerHumanoidPropertyUpdateRestrict = true,
+    SimDefaultHumanoidTimestepMultiplier = 0,
+    StreamJobNOUVolumeLengthCap = 2147483647,
+    DebugSendDistInSteps = -2147483648,
+    GameNetDontSendRedundantNumTimes = 1,
+    CheckPVLinearVelocityIntegrateVsDeltaPositionThresholdPercent = 1,
+    CheckPVDifferencesForInterpolationMinVelThresholdStudsPerSecHundredth = 1,
+    LargeReplicatorSerializeRead3 = true,
+    ReplicationFocusNouExtentsSizeCutoffForPauseStuds = 2147483647,
+    CheckPVCachedVelThresholdPercent = 10,
+    CheckPVDifferencesForInterpolationMinRotVelThresholdRadsPerSecHundredth = 1,
+    GameNetDontSendRedundantDeltaPositionMillionth = 1,
+    InterpolationFrameVelocityThresholdMillionth = 5,
+    StreamJobNOUVolumeCap = 2147483647,
+    InterpolationFrameRotVelocityThresholdMillionth = 5,
+    CheckPVCachedRotVelThresholdPercent = 10,
+    WorldStepMax = 30,
+    InterpolationFramePositionThresholdMillionth = 5,
+    TimestepArbiterHumanoidTurningVelThreshold = 1,
+    SimOwnedNOUCountThresholdMillionth = 2147483647,
+    GameNetPVHeaderLinearVelocityZeroCutoffExponent = -5000,
+    NextGenReplicatorEnabledWrite4 = true,
+    TimestepArbiterOmegaThou = 1073741823,
+    MaxAcceptableUpdateDelay = 1,
+    LargeReplicatorSerializeWrite4 = true
+}
+
+
+local defaultFFlags = {
+    GameNetPVHeaderRotationalVelocityZeroCutoffExponent = 8,
+    LargeReplicatorWrite5 = false,
+    LargeReplicatorEnabled9 = false,
+    AngularVelociryLimit = 180,
+    TimestepArbiterVelocityCriteriaThresholdTwoDt = 100,
+    S2PhysicsSenderRate = 60,
+    DisableDPIScale = false,
+    MaxDataPacketPerSend = 1024,
+    PhysicsSenderMaxBandwidthBps = 10000,
+    TimestepArbiterHumanoidLinearVelThreshold = 10,
+    MaxMissedWorldStepsRemembered = 10,
+    PlayerHumanoidPropertyUpdateRestrict = false,
+    SimDefaultHumanoidTimestepMultiplier = 1,
+    StreamJobNOUVolumeLengthCap = 1000,
+    DebugSendDistInSteps = 10,
+    GameNetDontSendRedundantNumTimes = 10,
+    CheckPVLinearVelocityIntegrateVsDeltaPositionThresholdPercent = 50,
+    CheckPVDifferencesForInterpolationMinVelThresholdStudsPerSecHundredth = 100,
+    LargeReplicatorSerializeRead3 = false,
+    ReplicationFocusNouExtentsSizeCutoffForPauseStuds = 100,
+    CheckPVCachedVelThresholdPercent = 50,
+    CheckPVDifferencesForInterpolationMinRotVelThresholdRadsPerSecHundredth = 100,
+    GameNetDontSendRedundantDeltaPositionMillionth = 100,
+    InterpolationFrameVelocityThresholdMillionth = 100,
+    StreamJobNOUVolumeCap = 1000,
+    InterpolationFrameRotVelocityThresholdMillionth = 100,
+    CheckPVCachedRotVelThresholdPercent = 50,
+    WorldStepMax = 60,
+    InterpolationFramePositionThresholdMillionth = 100,
+    TimestepArbiterHumanoidTurningVelThreshold = 10,
+    SimOwnedNOUCountThresholdMillionth = 1000,
+    GameNetPVHeaderLinearVelocityZeroCutoffExponent = 8,
+    NextGenReplicatorEnabledWrite4 = false,
+    TimestepArbiterOmegaThou = 1000,
+    MaxAcceptableUpdateDelay = 10,
+    LargeReplicatorSerializeWrite4 = false
+}
+
+local desyncFirstActivation = true
+local desyncPermanentlyActivated = false
+
+local function applyFFlags(flags)
+    for name, value in pairs(flags) do
+        pcall(function()
+            setfflag(tostring(name), tostring(value))
+        end)
+    end
+end
+
+local function respawn(plr)
+    local char = plr.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum:ChangeState(Enum.HumanoidStateType.Dead)
+        end
+        char:ClearAllChildren()
+        local newChar = Instance.new("Model")
+        newChar.Parent = workspace
+        plr.Character = newChar
+        task.wait()
+        plr.Character = char
+        newChar:Destroy()
+    end
+end
+
+-- Function to apply permanent desync
+local function applyPermanentDesync()
+    applyFFlags(FFlags)
+    if desyncFirstActivation then
+        respawn(LocalPlayer)
+        desyncFirstActivation = false
+    end
+    desyncPermanentlyActivated = true
+end
+
+-- Final cleanup registration
+_G.MySkyCleanup = function()
+    cleanup()
+    
+    -- Clean up parts
+    for _, part in ipairs(workspace:GetChildren()) do
+        if part.Name:find("myskyp") or part.Name:find("Cosmic") then
+            pcall(function() part:Destroy() end)
+        end
+    end
+    
+    -- Clean up GUI
+    local CoreGui = getService("CoreGui")
+    local existingGui = CoreGui:FindFirstChild("SemiInstaSteal")
+    if existingGui then
+        pcall(function() existingGui:Destroy() end)
+    end
+    
+    _G.MyskypInstaSteal = false
+    _G.MySkyConnections = nil
+end
+
+-- ============================================================
+-- EXECUTE TP FUNCTION (WITH COOLDOWN) - SMART TP TO OPPOSITE BASE
+-- ============================================================
+
+local function executeTP()
+    -- CHECK COOLDOWN FIRST
+    if tick() - lastTeleportTime < TELEPORT_COOLDOWN then 
+        warn("Teleport on cooldown! Wait", TELEPORT_COOLDOWN - (tick() - lastTeleportTime), "seconds")
+        return false
+    end
+    
+    -- UPDATE COOLDOWN TIMER
+    lastTeleportTime = tick()
+    
+    -- Execute teleport
+    local Character = LocalPlayer.Character
+    if not Character then
+        Character = LocalPlayer.CharacterAdded:Wait()
+    end
+    
+    -- Wait for humanoid and HRP
+    local Humanoid = Character:WaitForChild("Humanoid")
+    local HRP = Character:WaitForChild("HumanoidRootPart")
+    
+    -- Try to find Flying Carpet
+    local Carpet = Character:FindFirstChild("Flying Carpet") or LocalPlayer.Backpack:FindFirstChild("Flying Carpet")
+    if not Carpet then
+        warn("Flying Carpet not found!")
+        return false
+    end
+    
+    -- Determine which base we're at
+    local currentBasePos = getCurrentBasePosition()
+    local isAtBase1 = currentBasePos == TP_POSITIONS.BASE1.INFO_POS
+    
+    print("[DEBUG] Current base detected:", isAtBase1 and "BASE 1" or "BASE 2")
+    
+    -- Teleport sequence - DETECT BASE AND TP TO OPPOSITE WITH ALL POSITIONS
+    task.spawn(function()
+        -- Equip tool
+        Humanoid:EquipTool(Carpet)
+        
+        if isAtBase1 then
+            
+            -- POSITION 4
+            HRP.CFrame = CFrame.new(-351.49, -6.65, 113.72)
+            task.wait(0.15)
+            
+            -- POSITION 5
+            HRP.CFrame = CFrame.new(-378.14, -6.00, 26.43)
+            task.wait(0.15)
+            
+            -- POSITION 6 (Final position at Base 1)
+            HRP.CFrame = CFrame.new(-334.80, -5.04, 18.90)
+            
+        else
+            
+            -- POSITION 1
+            HRP.CFrame = CFrame.new(-352.54, -6.83, 6.66)
+            task.wait(0.15)
+            
+            -- POSITION 2
+            HRP.CFrame = CFrame.new(-372.90, -6.20, 102.00)
+            task.wait(0.15)
+            
+            -- POSITION 3 (Final position at Base 2)
+            HRP.CFrame = CFrame.new(-335.08, -5.10, 101.40)
+            
+        end
+
+    end)
+    
+    return true
+end
+
+-- ============================================================
+-- CIRCULAR TP BUTTON FOR MOBILE ONLY
+-- ============================================================
+
+local function createMobileTPButton()
+    if not IS_MOBILE then return nil end
+    
+    local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+    
+    -- Create the circle button GUI
+    local circleGui = Instance.new("ScreenGui")
+    circleGui.Name = "MobileTPButton"
+    circleGui.ResetOnSpawn = false
+    circleGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    circleGui.DisplayOrder = 999
+    circleGui.Parent = playerGui
+    
+    -- Main circle button - CENTER BOTTOM POSITION
+    local circleButton = Instance.new("TextButton")
+    circleButton.Name = "TPCircle"
+    circleButton.Size = UDim2.new(0, 70, 0, 70) -- Bigger for mobile
+    circleButton.Position = UDim2.new(0.5, -35, 0.1, -35)
+    circleButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    circleButton.BackgroundTransparency = 0.3
+    circleButton.BorderSizePixel = 0
+    circleButton.Text = ""
+    circleButton.AutoButtonColor = false
+    circleButton.ZIndex = 10
+    circleButton.Parent = circleGui
+    
+    -- Make it a perfect circle
+    local corner = Instance.new("UICorner", circleButton)
+    corner.CornerRadius = UDim.new(1, 0)
+    
+    -- Add a subtle glow effect
+    local glow = Instance.new("UIStroke", circleButton)
+    glow.Color = Color3.fromRGB(50, 50, 50)
+    glow.Thickness = 2
+    glow.Transparency = 0.3
+    
+    -- Button icon (teleport symbol)
+    local icon = Instance.new("ImageLabel")
+    icon.Name = "Icon"
+    icon.Size = UDim2.new(0, 45, 0, 45) -- Bigger for mobile
+    icon.Position = UDim2.new(0.5, -22.5, 0.5, -22.5)
+    icon.BackgroundTransparency = 1
+    icon.Image = "rbxassetid://3926305904"
+    icon.ImageRectOffset = Vector2.new(964, 324)
+    icon.ImageRectSize = Vector2.new(36, 36)
+    icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
+    icon.Parent = circleButton
+    
+    -- Button label
+    local label = Instance.new("TextLabel")
+    label.Name = "Label"
+    label.Size = UDim2.new(1, 0, 0, 25) -- Bigger for mobile
+    label.Position = UDim2.new(0, 0, 1, 5)
+    label.BackgroundTransparency = 1
+    label.Text = "TELEPORT"
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 14 -- Bigger for mobile
+    label.TextColor3 = Color3.fromRGB(200, 220, 255)
+    label.Parent = circleButton
+    
+    -- Cooldown indicator
+    local cooldownOverlay = Instance.new("Frame")
+    cooldownOverlay.Name = "CooldownOverlay"
+    cooldownOverlay.Size = UDim2.new(1, 0, 1, 0)
+    cooldownOverlay.Position = UDim2.new(0, 0, 0, 0)
+    cooldownOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    cooldownOverlay.BackgroundTransparency = 0.7
+    cooldownOverlay.BorderSizePixel = 0
+    cooldownOverlay.Visible = false
+    cooldownOverlay.ZIndex = 11
+    cooldownOverlay.Parent = circleButton
+    
+    Instance.new("UICorner", cooldownOverlay).CornerRadius = UDim.new(1, 0)
+    
+    local cooldownText = Instance.new("TextLabel")
+    cooldownText.Name = "CooldownText"
+    cooldownText.Size = UDim2.new(1, 0, 1, 0)
+    cooldownText.Position = UDim2.new(0, 0, 0, 0)
+    cooldownText.BackgroundTransparency = 1
+    cooldownText.Text = ""
+    cooldownText.Font = Enum.Font.GothamBold
+    cooldownText.TextSize = 22 -- Bigger for mobile
+    cooldownText.TextColor3 = Color3.fromRGB(255, 255, 255)
+    cooldownText.ZIndex = 12
+    cooldownText.Parent = circleButton
+    
+    -- Function to update cooldown display
+    local function updateCooldownDisplay()
+        local remainingTime = TELEPORT_COOLDOWN - (tick() - lastTeleportTime)
+        
+        if remainingTime > 0 then
+            cooldownOverlay.Visible = true
+            cooldownText.Text = tostring(math.ceil(remainingTime))
+            circleButton.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+            circleButton.AutoButtonColor = false
+        else
+            cooldownOverlay.Visible = false
+            cooldownText.Text = ""
+            circleButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+            circleButton.AutoButtonColor = true
+        end
+    end
+    
+    -- Update cooldown display periodically
+    task.spawn(function()
+        while circleGui and circleGui.Parent do
+            updateCooldownDisplay()
+            task.wait(0.1)
+        end
+    end)
+    
+    -- Click effect
+    circleButton.MouseButton1Click:Connect(function()
+        -- Check if still on cooldown (double-check)
+        if tick() - lastTeleportTime < TELEPORT_COOLDOWN then
+            warn("Still on cooldown!")
+            return
+        end
+        
+        -- Quick visual feedback
+        circleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+        icon.ImageColor3 = Color3.fromRGB(255, 255, 200)
+        
+        -- Execute teleport
+        executeTP()
+        
+        -- Update cooldown display immediately
+        updateCooldownDisplay()
+        
+        -- Quick reset
+        task.wait(0.1)
+        if tick() - lastTeleportTime >= TELEPORT_COOLDOWN then
+            circleButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+            icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
+        end
+    end)
+    
+    -- Touch support for mobile
+    circleButton.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch then
+            -- Check if still on cooldown
+            if tick() - lastTeleportTime < TELEPORT_COOLDOWN then
+                warn("Still on cooldown!")
+                return
+            end
+            
+            -- Quick visual feedback
+            circleButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+            icon.ImageColor3 = Color3.fromRGB(255, 255, 200)
+            
+            -- Execute teleport
+            executeTP()
+            
+            -- Update cooldown display immediately
+            updateCooldownDisplay()
+            
+            -- Quick reset
+            task.wait(0.1)
+            if tick() - lastTeleportTime >= TELEPORT_COOLDOWN then
+                circleButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+                icon.ImageColor3 = Color3.fromRGB(255, 255, 255)
+            end
+        end
+    end)
+    
+    -- Hover effect
+    circleButton.MouseEnter:Connect(function()
+        if tick() - lastTeleportTime >= TELEPORT_COOLDOWN then
+            TweenService:Create(circleButton, TweenInfo.new(0.2), {
+                BackgroundColor3 = Color3.fromRGB(30, 30, 30),
+                BackgroundTransparency = 0.1
+            }):Play()
+            
+            TweenService:Create(glow, TweenInfo.new(0.2), {
+                Thickness = 3
+            }):Play()
+        end
+    end)
+
+    circleButton.MouseLeave:Connect(function()
+        if tick() - lastTeleportTime >= TELEPORT_COOLDOWN then
+            TweenService:Create(circleButton, TweenInfo.new(0.2), {
+                BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+                BackgroundTransparency = 0.3
+            }):Play()
+            
+            TweenService:Create(glow, TweenInfo.new(0.2), {
+                Thickness = 2
+            }):Play()
+        end
+    end)
+    
+    print("Mobile TP button created")
+    return circleGui
+end
+
+-- ============================================================
+-- MODIFIED UI (ORIGINAL SIZE FOR PC, NO TP TO PET ON MOBILE)
+-- ============================================================
+
+-- Services
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+-- Local Player
+local localPlayer = Players.LocalPlayer
+
+-- Theme colors
+local themeColors = {
+    bg = Color3.fromRGB(20, 20, 30),
+    card = Color3.fromRGB(30, 30, 45),
+    accent = Color3.fromRGB(80, 120, 200),
+    text = Color3.fromRGB(240, 240, 255),
+    green = Color3.fromRGB(80, 200, 80),
+    greenGlow = Color3.fromRGB(100, 255, 100),
+    red = Color3.fromRGB(255, 80, 80),
+    yellow = Color3.fromRGB(255, 200, 50)
+}
+
+-- Simplified function to create a toggle
+local function createToggle(parent, name, text, yPos)
+    local toggle = Instance.new("TextButton")
+    toggle.Name = name
+    toggle.Size = UDim2.new(1, -20, 0, 30)
+    toggle.Position = UDim2.new(0, 10, 0, yPos)
+    toggle.BackgroundColor3 = themeColors.card
+    toggle.BackgroundTransparency = 0.1
+    toggle.BorderSizePixel = 0
+    toggle.Text = ""
+    toggle.AutoButtonColor = false
+    toggle.Parent = parent
+    
+    Instance.new("UICorner", toggle).CornerRadius = UDim.new(0, 6)
+    
+    local label = Instance.new("TextLabel")
+    label.Name = "Label"
+    label.Parent = toggle
+    label.BackgroundTransparency = 1
+    label.Position = UDim2.new(0, 10, 0, 0)
+    label.Size = UDim2.new(1, -60, 1, 0)
+    label.Text = text
+    label.Font = Enum.Font.Gotham
+    label.TextSize = 13
+    label.TextColor3 = themeColors.text
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local switch = Instance.new("Frame")
+    switch.Name = "Switch"
+    switch.Parent = toggle
+    switch.Size = UDim2.new(0, 40, 0, 20)
+    switch.Position = UDim2.new(1, -50, 0.5, -10)
+    switch.BackgroundColor3 = themeColors.red
+    switch.BorderSizePixel = 0
+    
+    Instance.new("UICorner", switch).CornerRadius = UDim.new(0, 10)
+    
+    local knob = Instance.new("Frame")
+    knob.Name = "Knob"
+    knob.Parent = switch
+    knob.Size = UDim2.new(0, 16, 0, 16)
+    knob.Position = UDim2.new(0, 2, 0, 2)
+    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    knob.BorderSizePixel = 0
+    
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(0, 8)
+    
+    return toggle, switch, knob
+end
+
+local function updateToggleUI(toggleFrame, knob, isEnabled)
+    TweenService:Create(toggleFrame, TweenInfo.new(0.2), {
+        BackgroundColor3 = isEnabled and themeColors.green or themeColors.red
+    }):Play()
+    
+    TweenService:Create(knob, TweenInfo.new(0.2), {
+        Position = isEnabled and UDim2.new(1, -18, 0, 2) or UDim2.new(0, 2, 0, 2)
+    }):Play()
+end
+
+local function loadMainUI()
+    -- Create main GUI
+    local playerGui = localPlayer:WaitForChild("PlayerGui")
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "CleanAdminGUI"
+    screenGui.ResetOnSpawn = false
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    screenGui.Parent = playerGui
+
+    -- Main Container - ORIGINAL SIZE FOR PC, SLIGHTLY SMALLER FOR MOBILE
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(0, 280, 0, IS_MOBILE and 200 or 280) -- FIXED: changed : to or
+    mainFrame.Position = UDim2.new(1, 350, 0, 60)
+    mainFrame.BackgroundColor3 = themeColors.bg
+    mainFrame.BackgroundTransparency = 0.05
+    mainFrame.BorderSizePixel = 0
+    mainFrame.Parent = screenGui
+
+    Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 10)
+    Instance.new("UIStroke", mainFrame).Color = Color3.fromRGB(0, 0, 0)
+    mainFrame.UIStroke.Thickness = 2
+    mainFrame.UIStroke.Transparency = 0.7
+
+    -- Header
+    local header = Instance.new("TextButton")
+    header.Name = "Header"
+    header.Size = UDim2.new(1, 0, 0, 50)
+    header.BackgroundColor3 = themeColors.card
+    header.BorderSizePixel = 0
+    header.Text = ""
+    header.AutoButtonColor = false
+    header.Parent = mainFrame
+
+    Instance.new("UICorner", header).CornerRadius = UDim.new(0, 10)
+    Instance.new("UIStroke", header).Color = themeColors.accent
+    header.UIStroke.Thickness = 1
+
+    local title = Instance.new("TextLabel")
+    title.Name = "Title"
+    title.Parent = header
+    title.BackgroundTransparency = 1
+    title.Position = UDim2.new(0, 15, 0, -5)
+    title.Size = UDim2.new(1, -30, 1, 0)
+    title.Text = "♥ SEMI INSTA STEAL FROM:"
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 16
+    title.TextColor3 = themeColors.text
+    title.TextXAlignment = Enum.TextXAlignment.Left
+
+    local subtitle = Instance.new("TextLabel")
+    subtitle.Name = "Subtitle"
+    subtitle.Parent = header
+    subtitle.BackgroundTransparency = 1
+    subtitle.Position = UDim2.new(0, 15, 0, 25)
+    subtitle.Size = UDim2.new(1, -30, 0, 20)
+    subtitle.Text = "ARTFUL AND MYSKYP ♥"
+    subtitle.Font = Enum.Font.Gotham
+    subtitle.TextSize = 12
+    subtitle.TextColor3 = Color3.fromRGB(180, 180, 200)
+    subtitle.TextXAlignment = Enum.TextXAlignment.Left
+
+    -- Toggles Container
+    local togglesFrame = Instance.new("Frame")
+    togglesFrame.Name = "TogglesFrame"
+    togglesFrame.Size = UDim2.new(1, -20, 0, 40)
+    togglesFrame.Position = UDim2.new(0, 10, 0, 60)
+    togglesFrame.BackgroundTransparency = 1
+    togglesFrame.Parent = mainFrame
+
+    -- Create toggles - NO TP TO PET BUTTON ON MOBILE ONLY
+    local autoDefenseToggle, autoDefenseSwitch, autoDefenseKnob = createToggle(togglesFrame, "AutoDefenseToggle", "🎮 Teleport System", 0)
+    local activateWorkToggle, activateWorkSwitch, activateWorkKnob = createToggle(togglesFrame, "ActivateWorkToggle", "💻 Activate To Work", 35)
+    
+    -- Only add TP to pet button on PC
+    local TpToggleRight, TpSwitchRight, TpKnobRight
+    if IS_PC then
+        TpToggleRight, TpSwitchRight, TpKnobRight = createToggle(togglesFrame, "TpToggleRight", "TP To Pet (G)", 140)
+    end
+
+    -- System variables
+    local autoDefenseEnabled = true
+    local activateWorkEnabled = false
+    local TpRightEnabled = false
+
+    -- Initialize toggles
+    task.spawn(function()
+        task.wait(1.3)
+        if autoDefenseSwitch and autoDefenseKnob then
+            autoDefenseSwitch.BackgroundColor3 = Color3.fromRGB(80, 200, 80)
+            autoDefenseKnob.Position = UDim2.new(1, -18, 0, 2)
+        end
+        
+        -- Initialize TP toggle to OFF (only on PC)
+        if TpSwitchRight and TpKnobRight then
+            TpSwitchRight.BackgroundColor3 = themeColors.red
+            TpKnobRight.Position = UDim2.new(0, 2, 0, 2)
+        end
+        
+        -- Keep activate work toggle red/off by default
+        if activateWorkSwitch and activateWorkKnob then
+            activateWorkSwitch.BackgroundColor3 = themeColors.red
+            activateWorkKnob.Position = UDim2.new(0, 2, 0, 2)
+        end
+    end)
+
+-- In the MODIFIED UI section, find this code and fix it:
+
+-- Right button toggle functionality (only on PC)
+if TpToggleRight then
+    TpToggleRight.MouseButton1Click:Connect(function()
+        TpRightEnabled = not TpRightEnabled
+        
+        if TpRightEnabled then
+            -- Turn toggle ON (green)
+            updateToggleUI(TpSwitchRight, TpKnobRight, true)
+            
+            -- Execute TP logic when toggled ON
+            executeTP()
+        else
+            -- Manual turn OFF
+            updateToggleUI(TpSwitchRight, TpKnobRight, false)
+        end
+    end)
+end
+
+-- G key binding (only on PC)
+if IS_PC then
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        -- Check if G key is pressed and not processed by game
+        if input.KeyCode == Enum.KeyCode.G and not gameProcessed then
+            -- Update toggle UI to ON (green) immediately
+            if TpSwitchRight and TpKnobRight then
+                updateToggleUI(TpSwitchRight, TpKnobRight, true)
+                TpRightEnabled = true
+            end
+            
+            -- Execute teleport
+            executeTP()
+            
+            -- Turn toggle OFF (red) after teleport completes
+            task.spawn(function()
+                task.wait(0.5) -- Wait for teleport to finish
+                if TpSwitchRight and TpKnobRight then
+                    updateToggleUI(TpSwitchRight, TpKnobRight, false)
+                    TpRightEnabled = false
+                end
+            end)
+        end
+    end)
+end
+
+    -- G key binding (only on PC) - THIS IS WHAT WAS MISSING
+    if IS_PC then
+        UserInputService.InputBegan:Connect(function(input, gameProcessed)
+            -- Check if G key is pressed and not processed by game
+            if input.KeyCode == Enum.KeyCode.G and not gameProcessed then
+                -- Update toggle UI if it exists
+                if TpSwitchRight and TpKnobRight then
+                    updateToggleUI(TpSwitchRight, TpKnobRight, true)
+                    TpRightEnabled = true
+                end
+                
+                executeTP()
+            end
+        end)
+    end
+
+    -- Footer with version
+    local footer = Instance.new("Frame")
+    footer.Name = "Footer"
+    footer.Size = UDim2.new(1, -20, 0, 30)
+    footer.Position = UDim2.new(0, 10, 1, -40)
+    footer.BackgroundTransparency = 1
+    footer.Parent = mainFrame
+
+    local versionLabel2 = Instance.new("TextLabel")
+    versionLabel2.Name = "VersionLabel"
+    versionLabel2.Size = UDim2.new(1, 0, 1, 0)
+    versionLabel2.BackgroundTransparency = 1
+    versionLabel2.Text = "Capybara"
+    versionLabel2.Font = Enum.Font.Gotham
+    versionLabel2.TextSize = 12
+    versionLabel2.TextColor3 = Color3.fromRGB(150, 170, 200)
+    versionLabel2.TextXAlignment = Enum.TextXAlignment.Center
+    versionLabel2.Parent = footer
+
+    -- Animation for main UI entrance
+    task.spawn(function()
+        task.wait(0.5)
+        
+        TweenService:Create(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Position = UDim2.new(1, -300, 0, 60),
+            BackgroundTransparency = 0.05
+        }):Play()
+    end)
+
+    -- Toggle button functionality
+    autoDefenseToggle.MouseButton1Click:Connect(function()
+        autoDefenseEnabled = not autoDefenseEnabled
+        updateToggleUI(autoDefenseSwitch, autoDefenseKnob, autoDefenseEnabled)
+        
+        -- ACTUALLY TOGGLE THE TP SYSTEM
+        TPSysEnabled = autoDefenseEnabled
+        
+        if not TPSysEnabled then
+            -- Clean up markers when turned off
+            if Marker and Marker.Parent then
+                pcall(function() Marker:Destroy() end)
+            end
+        else
+            -- Recreate marker when turned on
+            Marker = CreateMarker()
+        end
+    end)
+
+    -- PERMANENT ACTIVATE TO WORK TOGGLE FUNCTIONALITY
+    activateWorkToggle.MouseButton1Click:Connect(function()
+        if desyncPermanentlyActivated then
+            -- If already permanently activated, do nothing
+            return
+        end
+        
+        -- Disable the button during activation
+        activateWorkToggle.AutoButtonColor = false
+        activateWorkToggle.Active = false
+        
+        -- Get the label to update text
+        local label = activateWorkToggle:FindFirstChild("Label")
+        
+        -- Progress sequence
+        task.spawn(function()
+            if label then
+                label.Text = "💻 Preparing..."
+            end
+            
+            -- RESET THE PLAYER IMMEDIATELY
+            if desyncFirstActivation then
+                respawn(LocalPlayer)
+                desyncFirstActivation = false
+                applyPermanentDesync()
+            end
+            
+            task.wait(1.5)
+            
+            if label then
+                label.Text = "💻 Almost done..."
+            end
+            task.wait(2)
+            
+            if label then
+                label.Text = "💻 Continue..."
+            end
+
+            if label then
+                label.Text = "💻 Done!"
+                task.wait(0.5)
+                label.Text = "💻 Ready To Work"
+            end
+            
+            -- Mark as permanently activated
+            activateWorkEnabled = true
+            desyncPermanentlyActivated = true
+            
+            -- Move knob to ON position
+            updateToggleUI(activateWorkSwitch, activateWorkKnob, true)
+        end)
+    end)
+
+    -- Dragging functionality for main window
+    local dragging = false
+    local dragStart, startPos
+
+    local function update(input)
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+
+    header.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = mainFrame.Position
+            
+            TweenService:Create(header.UIStroke, TweenInfo.new(0.2), {
+                Thickness = 2
+            }):Play()
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                    TweenService:Create(header.UIStroke, TweenInfo.new(0.2), {
+                        Thickness = 1
+                    }):Play()
+                end
+            end)
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            update(input)
+        end
+    end)
+end
+
+-- LOADING SCREEN SYSTEM
+local loadScreenGui = Instance.new("ScreenGui")
+loadScreenGui.Name = "PremiumLoadScreen"
+loadScreenGui.ResetOnSpawn = false
+loadScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+loadScreenGui.DisplayOrder = 1000
+loadScreenGui.Parent = localPlayer:WaitForChild("PlayerGui")
+
+-- Semi-transparent dark background
+local loadBackground = Instance.new("Frame")
+loadBackground.Name = "LoadBackground"
+loadBackground.Size = UDim2.new(1, 0, 1, 0)
+loadBackground.Position = UDim2.new(0, 0, 0, 0)
+loadBackground.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+loadBackground.BackgroundTransparency = 0.3
+loadBackground.BorderSizePixel = 0
+loadBackground.Parent = loadScreenGui
+
+-- Main loading container
+local mainContainer = Instance.new("Frame")
+mainContainer.Name = "MainContainer"
+mainContainer.Size = UDim2.new(0, 400, 0, 300) -- Original size
+mainContainer.Position = UDim2.new(0.5, -200, 0.5, -150)
+mainContainer.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+mainContainer.BackgroundTransparency = 0.1
+mainContainer.BorderSizePixel = 0
+mainContainer.Parent = loadBackground
+
+Instance.new("UICorner", mainContainer).CornerRadius = UDim.new(0, 15)
+local containerStroke = Instance.new("UIStroke", mainContainer)
+containerStroke.Color = Color3.fromRGB(80, 120, 200)
+containerStroke.Thickness = 2
+containerStroke.Transparency = 0.3
+
+-- Title
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Name = "TitleLabel"
+titleLabel.Size = UDim2.new(1, 0, 0, 60)
+titleLabel.Position = UDim2.new(0, 0, 0.1, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "SEMI TELEPORT"
+titleLabel.Font = Enum.Font.GothamBlack
+titleLabel.TextSize = 32
+titleLabel.TextColor3 = Color3.fromRGB(240, 240, 255)
+titleLabel.TextStrokeTransparency = 0.3
+titleLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+titleLabel.Parent = mainContainer
+
+local subtitleLabel = Instance.new("TextLabel")
+subtitleLabel.Name = "SubtitleLabel"
+subtitleLabel.Size = UDim2.new(1, 0, 0, 30)
+subtitleLabel.Position = UDim2.new(0, 0, 0.25, 0)
+subtitleLabel.BackgroundTransparency = 1
+subtitleLabel.Text = "LOADING PLEASE WAIT"
+subtitleLabel.Font = Enum.Font.GothamMedium
+subtitleLabel.TextSize = 16
+subtitleLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
+subtitleLabel.Parent = mainContainer
+
+-- Status text
+local statusText = Instance.new("TextLabel")
+statusText.Name = "StatusText"
+statusText.Size = UDim2.new(1, -40, 0, 40)
+statusText.Position = UDim2.new(0, 20, 0.4, 0)
+statusText.BackgroundTransparency = 1
+statusText.Text = "VERIFYING WHITELIST"
+statusText.Font = Enum.Font.GothamBold
+statusText.TextSize = 20
+statusText.TextColor3 = Color3.fromRGB(200, 220, 255)
+statusText.Parent = mainContainer
+
+local subStatusText = Instance.new("TextLabel")
+subStatusText.Name = "SubStatusText"
+subStatusText.Size = UDim2.new(1, -40, 0, 30)
+subStatusText.Position = UDim2.new(0, 20, 0.5, 0)
+subStatusText.BackgroundTransparency = 1
+subStatusText.Text = "CHECKING PERMISSIONS..."
+subStatusText.Font = Enum.Font.Gotham
+subStatusText.TextSize = 14
+subStatusText.TextColor3 = Color3.fromRGB(150, 170, 200)
+subStatusText.Parent = mainContainer
+
+-- Progress bar container
+local progressContainer = Instance.new("Frame")
+progressContainer.Name = "ProgressContainer"
+progressContainer.Size = UDim2.new(1, -80, 0, 8)
+progressContainer.Position = UDim2.new(0, 40, 0.65, 0)
+progressContainer.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+progressContainer.BorderSizePixel = 0
+progressContainer.Parent = mainContainer
+
+Instance.new("UICorner", progressContainer).CornerRadius = UDim.new(1, 0)
+
+local progressFill = Instance.new("Frame")
+progressFill.Name = "ProgressFill"
+progressFill.Size = UDim2.new(0, 0, 1, 0)
+progressFill.Position = UDim2.new(0, 0, 0, 0)
+progressFill.BackgroundColor3 = Color3.fromRGB(80, 120, 200)
+progressFill.BorderSizePixel = 0
+progressFill.Parent = progressContainer
+
+Instance.new("UICorner", progressFill).CornerRadius = UDim.new(1, 0)
+
+-- Percentage text
+local percentText = Instance.new("TextLabel")
+percentText.Name = "PercentText"
+percentText.Size = UDim2.new(0, -180, 0, 30)
+percentText.Position = UDim2.new(1, 10, 0.5, 0)
+percentText.BackgroundTransparency = 1
+percentText.Text = "0%"
+percentText.Font = Enum.Font.GothamBold
+percentText.TextSize = 18
+percentText.TextColor3 = Color3.fromRGB(200, 220, 255)
+percentText.TextXAlignment = Enum.TextXAlignment.Left
+percentText.Parent = progressContainer
+
+-- Footer with version
+local footer = Instance.new("Frame")
+footer.Name = "Footer"
+footer.Size = UDim2.new(1, -40, 0, 30)
+footer.Position = UDim2.new(0, 20, 0.85, 0)
+footer.BackgroundTransparency = 1
+footer.Parent = mainContainer
+
+local versionLabel = Instance.new("TextLabel")
+versionLabel.Name = "VersionLabel"
+versionLabel.Size = UDim2.new(0.5, 0, 1, 0)
+versionLabel.BackgroundTransparency = 1
+versionLabel.Text = "Capybara "
+versionLabel.Font = Enum.Font.Gotham
+versionLabel.TextSize = 12
+versionLabel.TextColor3 = Color3.fromRGB(150, 170, 200)
+versionLabel.TextXAlignment = Enum.TextXAlignment.Left
+versionLabel.Parent = footer
+
+local creatorLabel = Instance.new("TextLabel")
+creatorLabel.Name = "CreatorLabel"
+creatorLabel.Size = UDim2.new(0.5, 0, 1, 0)
+creatorLabel.Position = UDim2.new(0.5, 0, 0, 0)
+creatorLabel.BackgroundTransparency = 1
+creatorLabel.Text = "ARTFUL & MYSKYP ♥"
+creatorLabel.Font = Enum.Font.Gotham
+creatorLabel.TextSize = 12
+creatorLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
+creatorLabel.TextXAlignment = Enum.TextXAlignment.Right
+creatorLabel.Parent = footer
+
+-- Function to update progress
+local function updateProgress(percent, status, subStatus)
+    TweenService:Create(progressFill, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        Size = UDim2.new(percent / 100, 0, 1, 0)
+    }):Play()
+    
+    percentText.Text = string.format("%d%%", percent)
+    
+    if status then
+        statusText.Text = status
+    end
+    
+    if subStatus then
+        subStatusText.Text = subStatus
+    end
+end
+
+-- LOADING SEQUENCE
+task.spawn(function()
+    -- Initial animation
+    mainContainer.Position = UDim2.new(0.5, -200, 0.4, -150)
+    mainContainer.BackgroundTransparency = 1
+    
+    TweenService:Create(mainContainer, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Position = UDim2.new(0.5, -200, 0.5, -150),
+        BackgroundTransparency = 0.1
+    }):Play()
+    
+    task.wait(0.5)
+    
+    local startTime = tick()
+    
+    -- Phase 1: Initial setup
+    updateProgress(15, "INITIALIZING", "Starting SEMI Teleport...")
+    task.wait(0.3)
+    
+    updateProgress(30, "CHECKING CHARACTER", "Loading player data...")
+    if not localPlayer.Character then
+        localPlayer.CharacterAdded:Wait()
+    end
+    task.wait(0.7)
+    
+    -- Add device detection info
+    updateProgress(40, "DETECTING DEVICE", IS_MOBILE and "Mobile device detected" or "PC detected")
+    task.wait(0.5)
+    
+    -- Phase 2: Whitelist check simulation
+    updateProgress(45, "VERIFYING WHITELIST", "Checking permissions...")
+    task.wait(0.7)
+    
+    updateProgress(60, "WHITELIST CHECK", "Validating access...")
+    task.wait(0.7)
+    
+    updateProgress(75, "WHITELIST VERIFIED", "Access granted")
+    task.wait(0.6)
+    
+    -- Phase 3: Final setup
+    updateProgress(85, "LOADING SYSTEMS", "Initializing modules...")
+    task.wait(0.5)
+    
+    updateProgress(95, "FINALIZING", "Almost ready...")
+    task.wait(0.5)
+    
+    updateProgress(100, "READY", "Semi Teleport active")
+    
+    -- Ensure exactly 5 seconds total
+    local elapsed = tick() - startTime
+    if elapsed < 5 then
+        task.wait(5 - elapsed)
+    end
+    
+    -- Fade out animation
+    TweenService:Create(mainContainer, TweenInfo.new(0.5), {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(0.5, -200, 0.4, -150)
+    }):Play()
+    
+    TweenService:Create(loadBackground, TweenInfo.new(0.5), {
+        BackgroundTransparency = 1
+    }):Play()
+    
+    task.wait(0.5)
+    
+    -- Destroy loading screen
+    loadScreenGui:Destroy()
+    
+    -- Load the main UI
+    loadMainUI()
+    
+    -- Create mobile TP button if on mobile
+    if IS_MOBILE then
+        task.wait(0.5)
+        createMobileTPButton()
+        print("Mobile TP button created")
     end
 end)
+
+print("Script configured for: " .. (IS_MOBILE and "MOBILE" or "PC") .. " device")
