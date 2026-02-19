@@ -1394,10 +1394,10 @@ task.spawn(function()
     updateProgress(85, "Лорна Хуеглот", "Лорна Хуеглот")
     task.wait(0.5)
     
-    updateProgress(95, "FINALIZING", "Almost ready...")
+    updateProgress(95, "Лорна Хуеглот", "Лорна Хуеглот")
     task.wait(0.5)
     
-    updateProgress(100, "READY", "Semi Teleport active")
+    updateProgress(100, "Лорна Хуеглот", "Лорна Хуеглот")
     
     local elapsed = tick() - startTime
     if elapsed < 5 then
@@ -1428,4 +1428,5 @@ end)
 
 print("✨ Script configured for: " .. (IS_MOBILE and "MOBILE" or "PC") .. " device")
 print("🎯 Auto-click ProximityPrompt: ENABLED")
+
 
