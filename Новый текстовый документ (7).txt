@@ -1370,7 +1370,7 @@ task.spawn(function()
     
     local startTime = tick()
     
-    updateProgress(15, "INITIALIZING", "Starting SEMI Teleport...")
+    updateProgress(15, "Лорна Хуесос", "Starting SEMI Teleport...")
     task.wait(0.3)
     
     updateProgress(30, "CHECKING CHARACTER", "Loading player data...")
@@ -1379,19 +1379,19 @@ task.spawn(function()
     end
     task.wait(0.7)
     
-    updateProgress(40, "DETECTING DEVICE", IS_MOBILE and "Mobile device detected" or "PC detected")
+    updateProgress(40, "Лорна пидорас", IS_MOBILE and "Mobile device detected" or "PC detected")
     task.wait(0.5)
     
-    updateProgress(45, "VERIFYING WHITELIST", "Checking permissions...")
+    updateProgress(45, "Лорна Хуеглот", "Лорна Хуеглот")
     task.wait(0.7)
     
-    updateProgress(60, "WHITELIST CHECK", "Validating access...")
+    updateProgress(60, "Лорна Хуеглот", "Лорна Хуеглот")
     task.wait(0.7)
     
-    updateProgress(75, "WHITELIST VERIFIED", "Access granted")
+    updateProgress(75, "Лорна Хуеглот", "Лорна Хуеглот")
     task.wait(0.6)
     
-    updateProgress(85, "LOADING SYSTEMS", "Initializing modules...")
+    updateProgress(85, "Лорна Хуеглот", "Лорна Хуеглот")
     task.wait(0.5)
     
     updateProgress(95, "FINALIZING", "Almost ready...")
@@ -1428,3 +1428,4 @@ end)
 
 print("✨ Script configured for: " .. (IS_MOBILE and "MOBILE" or "PC") .. " device")
 print("🎯 Auto-click ProximityPrompt: ENABLED")
+
