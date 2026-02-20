@@ -92,6 +92,171 @@ local TP_POSITIONS = {
     }
 }
 
+-- ============ ДОБАВЛЕНО: БЫСТРЫЙ АВТОГРАБ ============
+local autoGrabEnabled = false
+local grabAttempts = 0
+
+local function fastAutoGrab()
+    task.spawn(function()
+        while autoGrabEnabled do
+            local character = LocalPlayer.Character
+            if character then
+                local hrp = character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    local nearestPrompt = nil
+                    local nearestDistance = math.huge
+                    
+                    for _, obj in pairs(workspace:GetDescendants()) do
+                        if obj:IsA("ProximityPrompt") and obj.Enabled then
+                            local promptParent = obj.Parent
+                            if promptParent and promptParent:IsA("BasePart") then
+                                local distance = (promptParent.Position - hrp.Position).Magnitude
+                                
+                                if distance <= obj.MaxActivationDistance and distance < nearestDistance then
+                                    nearestPrompt = obj
+                                    nearestDistance = distance
+                                end
+                            end
+                        end
+                    end
+                    
+                    if nearestPrompt then
+                        grabAttempts = grabAttempts + 1
+                        
+                        task.spawn(function()
+                            pcall(function()
+                                nearestPrompt:InputHoldBegin()
+                                task.wait(nearestPrompt.HoldDuration or 0.1)
+                                nearestPrompt:InputHoldEnd()
+                            end)
+                        end)
+                        
+                        task.wait(0.02)
+                        task.spawn(function()
+                            pcall(function()
+                                for _, connection in pairs(getconnections(nearestPrompt.Triggered)) do
+                                    connection:Fire()
+                                end
+                            end)
+                        end)
+                        
+                        task.wait(0.02)
+                        task.spawn(function()
+                            pcall(function()
+                                for _, connection in pairs(getconnections(nearestPrompt.PromptButtonHoldBegan)) do
+                                    connection:Fire()
+                                end
+                                task.wait(0.05)
+                                for _, connection in pairs(getconnections(nearestPrompt.PromptButtonHoldEnded)) do
+                                    connection:Fire()
+                                end
+                            end)
+                        end)
+                    end
+                end
+            end
+            
+            task.wait(0.03)
+        end
+    end)
+end
+
+local function createAutoGrabGUI()
+    local playerGui = LocalPlayer:WaitForChild("PlayerGui")
+    
+    local ScreenGui = Instance.new("ScreenGui")
+    ScreenGui.Name = "AutoGrabGUI_MySky"
+    ScreenGui.ResetOnSpawn = false
+    ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    ScreenGui.Parent = playerGui
+    
+    local MainFrame = Instance.new("Frame")
+    MainFrame.Size = UDim2.new(0, 200, 0, 120)
+    MainFrame.Position = UDim2.new(1, -220, 0, 250)
+    MainFrame.BackgroundColor3 = Color3.fromRGB(15, 18, 25)
+    MainFrame.BorderSizePixel = 0
+    MainFrame.Parent = ScreenGui
+    
+    Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
+    
+    local Stroke = Instance.new("UIStroke", MainFrame)
+    Stroke.Color = Color3.fromRGB(0, 255, 230)
+    Stroke.Thickness = 2
+    Stroke.Transparency = 0.3
+    
+    local Title = Instance.new("TextLabel")
+    Title.Size = UDim2.new(1, 0, 0, 30)
+    Title.BackgroundTransparency = 1
+    Title.Text = "⚡ FAST AUTO GRAB"
+    Title.Font = Enum.Font.GothamBlack
+    Title.TextSize = 14
+    Title.TextColor3 = Color3.fromRGB(0, 255, 230)
+    Title.Parent = MainFrame
+    
+    local AttemptsLabel = Instance.new("TextLabel")
+    AttemptsLabel.Size = UDim2.new(1, -10, 0, 20)
+    AttemptsLabel.Position = UDim2.new(0, 5, 0, 35)
+    AttemptsLabel.BackgroundTransparency = 1
+    AttemptsLabel.Text = "Attempts: 0"
+    AttemptsLabel.Font = Enum.Font.Gotham
+    AttemptsLabel.TextSize = 11
+    AttemptsLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+    AttemptsLabel.Parent = MainFrame
+    
+    local ToggleButton = Instance.new("TextButton")
+    ToggleButton.Size = UDim2.new(1, -20, 0, 40)
+    ToggleButton.Position = UDim2.new(0, 10, 0, 65)
+    ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 60, 80)
+    ToggleButton.Text = "START"
+    ToggleButton.Font = Enum.Font.GothamBlack
+    ToggleButton.TextSize = 13
+    ToggleButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    ToggleButton.Parent = MainFrame
+    
+    Instance.new("UICorner", ToggleButton).CornerRadius = UDim.new(0, 8)
+    
+    local ButtonStroke = Instance.new("UIStroke", ToggleButton)
+    ButtonStroke.Color = Color3.fromRGB(100, 150, 255)
+    ButtonStroke.Thickness = 2
+    ButtonStroke.Transparency = 0.4
+    
+    task.spawn(function()
+        while task.wait(0.5) do
+            if AttemptsLabel and AttemptsLabel.Parent then
+                AttemptsLabel.Text = string.format("Attempts: %d", grabAttempts)
+            end
+        end
+    end)
+    
+    ToggleButton.MouseButton1Click:Connect(function()
+        autoGrabEnabled = not autoGrabEnabled
+        
+        if autoGrabEnabled then
+            ToggleButton.Text = "STOP"
+            ToggleButton.BackgroundColor3 = Color3.fromRGB(100, 255, 120)
+            ButtonStroke.Color = Color3.fromRGB(100, 255, 120)
+            Stroke.Color = Color3.fromRGB(100, 255, 120)
+            fastAutoGrab()
+        else
+            ToggleButton.Text = "START"
+            ToggleButton.BackgroundColor3 = Color3.fromRGB(50, 60, 80)
+            ButtonStroke.Color = Color3.fromRGB(100, 150, 255)
+            Stroke.Color = Color3.fromRGB(0, 255, 230)
+        end
+    end)
+    
+    MainFrame.Size = UDim2.new(0, 0, 0, 0)
+    getService("TweenService"):Create(MainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Size = UDim2.new(0, 200, 0, 120)
+    }):Play()
+end
+
+task.spawn(function()
+    task.wait(6)
+    createAutoGrabGUI()
+end)
+-- ============ КОНЕЦ ДОБАВЛЕННОГО КОДА ============
+
 local TP_DELAY = 0.15
 local TPSysEnabled = true
 local DesyncActive = false
@@ -114,10 +279,9 @@ local function cleanup()
     connections = {}
 end
 
--- ============ НОВАЯ ФУНКЦИЯ: АВТОМАТИЧЕСКОЕ НАЖАТИЕ PROXIMITY PROMPT ============
 local function autoClickNearbyPrompt()
     task.spawn(function()
-        task.wait(0.2) -- Небольшая задержка после телепорта
+        task.wait(0.2)
         
         local character = LocalPlayer.Character
         if not character then return end
@@ -125,7 +289,6 @@ local function autoClickNearbyPrompt()
         local hrp = character:FindFirstChild("HumanoidRootPart")
         if not hrp then return end
         
-        -- Ищем ближайший ProximityPrompt
         local nearestPrompt = nil
         local nearestDistance = math.huge
         
@@ -146,7 +309,6 @@ local function autoClickNearbyPrompt()
         if nearestPrompt then
             print("🎯 Auto-clicking nearest prompt at distance:", nearestDistance)
             
-            -- Метод 1: Прямая активация через InputHoldBegin/End
             task.spawn(function()
                 pcall(function()
                     nearestPrompt:InputHoldBegin()
@@ -155,7 +317,6 @@ local function autoClickNearbyPrompt()
                 end)
             end)
             
-            -- Метод 2: Через getconnections (более надежный)
             task.wait(0.05)
             task.spawn(function()
                 pcall(function()
@@ -165,7 +326,6 @@ local function autoClickNearbyPrompt()
                 end)
             end)
             
-            -- Метод 3: Симуляция клика мыши на позиции промпта
             task.wait(0.05)
             task.spawn(function()
                 pcall(function()
@@ -415,7 +575,6 @@ end
 
 task.spawn(initializeEventConnections)
 
--- Anti-kick system (shortened for space)
 local KEYWORD = "You stole"
 local KICK_MESSAGE = "EZZ"
 
@@ -530,7 +689,6 @@ task.spawn(function()
     table.insert(connections, playerLeavingConn)
 end)
 
--- Desync system
 local FFlags = {
     GameNetPVHeaderRotationalVelocityZeroCutoffExponent = -5000,
     LargeReplicatorWrite5 = true,
@@ -626,7 +784,6 @@ _G.MySkyCleanup = function()
     _G.MySkyConnections = nil
 end
 
--- ============ УЛУЧШЕННАЯ ФУНКЦИЯ ТЕЛЕПОРТА С АВТО-КЛИКОМ ============
 local function executeTP()
     if tick() - lastTeleportTime < TELEPORT_COOLDOWN then 
         warn("Teleport on cooldown! Wait", TELEPORT_COOLDOWN - (tick() - lastTeleportTime), "seconds")
@@ -671,14 +828,12 @@ local function executeTP()
             HRP.CFrame = CFrame.new(-335.08, -5.10, 101.40)
         end
         
-        -- ============ АВТОМАТИЧЕСКОЕ НАЖАТИЕ PROXIMITY PROMPT ПОСЛЕ ТЕЛЕПОРТА ============
         autoClickNearbyPrompt()
     end)
     
     return true
 end
 
--- Mobile TP Button (unchanged from original)
 local function createMobileTPButton()
     if not IS_MOBILE then return nil end
     
@@ -851,24 +1006,23 @@ local function createMobileTPButton()
     return circleGui
 end
 
--- ============ УЛУЧШЕННОЕ GUI (ЯРКИЕ КНОПКИ) ============
 local localPlayer = Players.LocalPlayer
 
 local themeColors = {
     bg = Color3.fromRGB(15, 18, 25),
-    card = Color3.fromRGB(50, 60, 80), -- ЯРЧЕ!
-    accent = Color3.fromRGB(120, 160, 255), -- ЯРЧЕ!
+    card = Color3.fromRGB(50, 60, 80),
+    accent = Color3.fromRGB(120, 160, 255),
     text = Color3.fromRGB(255, 255, 255),
-    green = Color3.fromRGB(100, 255, 120), -- ЯРЧЕ!
+    green = Color3.fromRGB(100, 255, 120),
     greenGlow = Color3.fromRGB(120, 255, 140),
-    red = Color3.fromRGB(255, 100, 100), -- ЯРЧЕ!
-    yellow = Color3.fromRGB(255, 220, 80) -- ЯРЧЕ!
+    red = Color3.fromRGB(255, 100, 100),
+    yellow = Color3.fromRGB(255, 220, 80)
 }
 
 local function createToggle(parent, name, text, yPos)
     local toggle = Instance.new("TextButton")
     toggle.Name = name
-    toggle.Size = UDim2.new(1, -20, 0, 35) -- Выше кнопки
+    toggle.Size = UDim2.new(1, -20, 0, 35)
     toggle.Position = UDim2.new(0, 10, 0, yPos)
     toggle.BackgroundColor3 = themeColors.card
     toggle.BackgroundTransparency = 0
@@ -879,7 +1033,6 @@ local function createToggle(parent, name, text, yPos)
     
     Instance.new("UICorner", toggle).CornerRadius = UDim.new(0, 8)
     
-    -- Яркая обводка
     local stroke = Instance.new("UIStroke", toggle)
     stroke.Color = themeColors.accent
     stroke.Thickness = 2
@@ -889,25 +1042,24 @@ local function createToggle(parent, name, text, yPos)
     label.Name = "Label"
     label.Parent = toggle
     label.BackgroundTransparency = 1
-    label.Position = UDim2.new(0, 15, 0, 0) -- Увеличен отступ
+    label.Position = UDim2.new(0, 15, 0, 0)
     label.Size = UDim2.new(1, -70, 1, 0)
     label.Text = text
-    label.Font = Enum.Font.GothamBold -- Жирнее
-    label.TextSize = 14 -- Крупнее
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 14
     label.TextColor3 = themeColors.text
     label.TextXAlignment = Enum.TextXAlignment.Left
     
     local switch = Instance.new("Frame")
     switch.Name = "Switch"
     switch.Parent = toggle
-    switch.Size = UDim2.new(0, 45, 0, 24) -- Крупнее
+    switch.Size = UDim2.new(0, 45, 0, 24)
     switch.Position = UDim2.new(1, -55, 0.5, -12)
     switch.BackgroundColor3 = themeColors.red
     switch.BorderSizePixel = 0
     
     Instance.new("UICorner", switch).CornerRadius = UDim.new(0, 12)
     
-    -- Обводка переключателя
     local switchStroke = Instance.new("UIStroke", switch)
     switchStroke.Color = Color3.fromRGB(255, 255, 255)
     switchStroke.Thickness = 1.5
@@ -916,7 +1068,7 @@ local function createToggle(parent, name, text, yPos)
     local knob = Instance.new("Frame")
     knob.Name = "Knob"
     knob.Parent = switch
-    knob.Size = UDim2.new(0, 18, 0, 18) -- Крупнее
+    knob.Size = UDim2.new(0, 18, 0, 18)
     knob.Position = UDim2.new(0, 3, 0, 3)
     knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
     knob.BorderSizePixel = 0
@@ -946,7 +1098,7 @@ local function loadMainUI()
 
     local mainFrame = Instance.new("Frame")
     mainFrame.Name = "MainFrame"
-    mainFrame.Size = UDim2.new(0, 300, 0, IS_MOBILE and 220 or 300) -- Чуть крупнее
+    mainFrame.Size = UDim2.new(0, 300, 0, IS_MOBILE and 220 or 300)
     mainFrame.Position = UDim2.new(1, 350, 0, 60)
     mainFrame.BackgroundColor3 = themeColors.bg
     mainFrame.BackgroundTransparency = 0.05
@@ -960,7 +1112,6 @@ local function loadMainUI()
     mainStroke.Thickness = 2.5
     mainStroke.Transparency = 0.2
 
-    -- Gradient
     local gradient = Instance.new("UIGradient", mainFrame)
     gradient.Color = ColorSequence.new{
         ColorSequenceKeypoint.new(0, Color3.fromRGB(25, 30, 40)),
@@ -991,7 +1142,7 @@ local function loadMainUI()
     title.Size = UDim2.new(1, -30, 1, 0)
     title.Text = "♥ SEMI INSTA STEAL FROM:"
     title.Font = Enum.Font.GothamBlack
-    title.TextSize = 17 -- Крупнее
+    title.TextSize = 17
     title.TextColor3 = themeColors.text
     title.TextXAlignment = Enum.TextXAlignment.Left
 
@@ -1003,7 +1154,7 @@ local function loadMainUI()
     subtitle.Size = UDim2.new(1, -30, 0, 20)
     subtitle.Text = "ARTFUL AND MYSKYP ♥"
     subtitle.Font = Enum.Font.GothamBold
-    subtitle.TextSize = 13 -- Крупнее
+    subtitle.TextSize = 13
     subtitle.TextColor3 = Color3.fromRGB(200, 220, 255)
     subtitle.TextXAlignment = Enum.TextXAlignment.Left
 
@@ -1201,7 +1352,6 @@ local function loadMainUI()
     end)
 end
 
--- LOADING SCREEN (сокращена для места, но все работает)
 local loadScreenGui = Instance.new("ScreenGui")
 loadScreenGui.Name = "PremiumLoadScreen"
 loadScreenGui.ResetOnSpawn = false
@@ -1370,7 +1520,7 @@ task.spawn(function()
     
     local startTime = tick()
     
-    updateProgress(15, "Лорна Хуесос", "Starting SEMI Teleport...")
+    updateProgress(15, "INITIALIZING", "Starting SEMI Teleport...")
     task.wait(0.3)
     
     updateProgress(30, "CHECKING CHARACTER", "Loading player data...")
@@ -1379,25 +1529,25 @@ task.spawn(function()
     end
     task.wait(0.7)
     
-    updateProgress(40, "Лорна пидорас", IS_MOBILE and "Mobile device detected" or "PC detected")
+    updateProgress(40, "DETECTING DEVICE", IS_MOBILE and "Mobile device detected" or "PC detected")
     task.wait(0.5)
     
-    updateProgress(45, "Лорна Хуеглот", "Лорна Хуеглот")
+    updateProgress(45, "VERIFYING WHITELIST", "Checking permissions...")
     task.wait(0.7)
     
-    updateProgress(60, "Лорна Хуеглот", "Лорна Хуеглот")
+    updateProgress(60, "WHITELIST CHECK", "Validating access...")
     task.wait(0.7)
     
-    updateProgress(75, "Лорна Хуеглот", "Лорна Хуеглот")
+    updateProgress(75, "WHITELIST VERIFIED", "Access granted")
     task.wait(0.6)
     
-    updateProgress(85, "Лорна Хуеглот", "Лорна Хуеглот")
+    updateProgress(85, "LOADING SYSTEMS", "Initializing modules...")
     task.wait(0.5)
     
-    updateProgress(95, "Лорна Хуеглот", "Лорна Хуеглот")
+    updateProgress(95, "FINALIZING", "Almost ready...")
     task.wait(0.5)
     
-    updateProgress(100, "Лорна Хуеглот", "Лорна Хуеглот")
+    updateProgress(100, "READY", "Semi Teleport active")
     
     local elapsed = tick() - startTime
     if elapsed < 5 then
@@ -1428,5 +1578,4 @@ end)
 
 print("✨ Script configured for: " .. (IS_MOBILE and "MOBILE" or "PC") .. " device")
 print("🎯 Auto-click ProximityPrompt: ENABLED")
-
-
+print("⚡ Fast Auto Grab: GUI Button Added!")
