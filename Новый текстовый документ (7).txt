@@ -1,5 +1,4 @@
-         Position()
-    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
         return TP_POSITIONS.BASE1.INFO_POS
     end
     
@@ -1011,5 +1010,6 @@ end)
 print("✨ Script configured for: " .. (IS_MOBILE and "MOBILE" or "PC") .. " device")
 print("🎯 Auto-click ProximityPrompt: ENABLED")
 print("⚡ Fast Auto Grab: GUI Button Added!")
+
 
 
