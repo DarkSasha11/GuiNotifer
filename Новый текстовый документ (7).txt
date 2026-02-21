@@ -1,16 +1,646 @@
-if not game:IsLoaded() then game.Loaded:Wait() end
+-- https://discord.gg/MT6BXdH9q
+local function safeCall(func, ...)
+    local start = tick()
+    local success, result = pcall(func, ...)
+    local duration = tick() - start
+    
+    if duration > 0.08 then
+        warn("Slow function:", debug.info(func, "n") or "anonymous", "took", duration, "seconds")
+    end
+    
+    return success, result
+end
+
+-- Cleanup previous execution
+if _G.MySkyCleanup then
+    pcall(_G.MySkyCleanup)
+end
+
+_G.MySkyCleanup = function()
+    if _G.MySkyConnections then
+        for _, conn in ipairs(_G.MySkyConnections) do
+            pcall(function() conn:Disconnect() end)
+        end
+        _G.MySkyConnections = {}
+    end
+    
+    for _, part in ipairs(workspace:GetChildren()) do
+        if part.Name:find("myskyp") or part.Name:find("Cosmic") or part.Name == "CustomGrabPoint" then
+            pcall(function() part:Destroy() end)
+        end
+    end
+    
+    local coreGui = game:GetService("CoreGui")
+    local existingGui = coreGui:FindFirstChild("SemiInstaSteal")
+    if existingGui then
+        pcall(function() existingGui:Destroy() end)
+    end
+end
+
+pcall(_G.MySkyCleanup)
 
 -- Services
-local Players = game:GetService("Players")
-local ProximityPromptService = game:GetService("ProximityPromptService")
-local TweenService = game:GetService("TweenService")
-local RunService = game:GetService("RunService")
-local Workspace = game:GetService("Workspace")
-local UserInputService = game:GetService("UserInputService")
-local lp = Players.LocalPlayer
+local Services = {}
+local servicePromises = {}
 
--- FFlags
-local fflags = {
+local function getService(serviceName)
+    if Services[serviceName] then
+        return Services[serviceName]
+    end
+    
+    if not servicePromises[serviceName] then
+        servicePromises[serviceName] = task.spawn(function()
+            Services[serviceName] = game:GetService(serviceName)
+            servicePromises[serviceName] = nil
+        end)
+    end
+    
+    while not Services[serviceName] do
+        task.wait()
+    end
+    
+    return Services[serviceName]
+end
+
+local Players = getService("Players")
+local LocalPlayer = Players.LocalPlayer
+local ProximityPromptService = getService("ProximityPromptService")
+local VirtualInputManager = getService("VirtualInputManager")
+
+local connections = {}
+_G.MySkyConnections = connections
+
+print("Script loaded successfully for user:", LocalPlayer.Name)
+
+if _G.MyskypInstaSteal then 
+    pcall(_G.MySkyCleanup)
+    task.wait(0.1)
+end
+_G.MyskypInstaSteal = true
+
+-- Configuration
+local TP_POSITIONS = {
+    BASE1 = {
+        INFO_POS = CFrame.new(334.76, 55.334, 99.40),
+        TELEPORT_POS = CFrame.new(-352.98, -7.30, 74.3),
+        STAND_HERE_PART = CFrame.new(-334.76, -5.334, 99.40) * CFrame.new(0, 2.6, 0)
+    },
+    BASE2 = {
+        INFO_POS = CFrame.new(334.76, 55.334, 19.17),
+        TELEPORT_POS = CFrame.new(-352.98, -7.30, 45.76),
+        STAND_HERE_PART = CFrame.new(-336.41, -5.34, 19.20) * CFrame.new(0, 2.6, 0)
+    }
+}
+
+-- ============ CUSTOM POSITION VARIABLES ============
+local CustomPosCFrame = nil
+local CustomPart = nil
+local CustomBeam = nil
+local CustomAtt0 = nil
+local CustomAtt1 = nil
+
+-- ============ ФУНКЦИЯ INSTA STEAL (БЫСТРАЯ) ============
+local function instaStealTarget(prompt)
+    if not prompt then return end
+    
+    task.spawn(function()
+        -- Метод 1: FireProximityPrompt (если поддерживается)
+        if fireproximityprompt then
+            fireproximityprompt(prompt)
+        end
+        
+        -- Метод 2: GetConnections (самый быстрый для чита)
+        if getconnections then
+            for _, c in pairs(getconnections(prompt.PromptButtonHoldBegan)) do c:Fire() end
+            task.wait()
+            for _, c in pairs(getconnections(prompt.Triggered)) do c:Fire() end
+            for _, c in pairs(getconnections(prompt.PromptButtonHoldEnded)) do c:Fire() end
+        end
+        
+        -- Метод 3: Стандартный
+        pcall(function()
+            prompt:InputHoldBegin()
+            task.wait(prompt.HoldDuration)
+            prompt:InputHoldEnd()
+        end)
+    end)
+end
+
+-- ============ АВТОМАТИЧЕСКОЕ НАЖАТИЕ ============
+local function autoClickNearbyPrompt()
+    task.spawn(function()
+        task.wait(0.15) -- Минимальная задержка после ТП чтобы прогрузилось
+        
+        local character = LocalPlayer.Character
+        if not character then return end
+        
+        local hrp = character:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+        
+        -- Ищем ближайший ProximityPrompt
+        local nearestPrompt = nil
+        local nearestDistance = 20 -- Радиус поиска
+        
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if obj:IsA("ProximityPrompt") then
+                local promptParent = obj.Parent
+                if promptParent and promptParent:IsA("BasePart") then
+                    local distance = (promptParent.Position - hrp.Position).Magnitude
+                    
+                    if distance <= nearestDistance then
+                        nearestPrompt = obj
+                        nearestDistance = distance
+                    end
+                end
+            end
+        end
+        
+        if nearestPrompt then
+            print("⚡ FAST STEAL ACTIVATED ON:", nearestPrompt.Parent.Name)
+            instaStealTarget(nearestPrompt) -- Вызываем мгновенный стил
+        else
+            print("⚠️ No nearby prompt found to steal")
+        end
+    end)
+end
+
+local TP_DELAY = 0.15
+local TPSysEnabled = true
+local DesyncActive = false
+local lastTeleportTime = 0
+local TELEPORT_COOLDOWN = 0.8
+local lastMarkerUpdate = 0
+local MARKER_UPDATE_INTERVAL = 0.4
+
+local UserInputService = getService("UserInputService")
+local TweenService = getService("TweenService")
+local IS_MOBILE = UserInputService.TouchEnabled
+local IS_PC = not IS_MOBILE
+
+print("Device detection:", IS_MOBILE and "MOBILE" or "PC")
+
+local function cleanup()
+    for _, conn in ipairs(connections) do
+        pcall(function() conn:Disconnect() end)
+    end
+    connections = {}
+end
+
+local function TeleportPath(targetCFrame)
+    if tick() - lastTeleportTime < TELEPORT_COOLDOWN then 
+        return 
+    end
+    lastTeleportTime = tick()
+    
+    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then 
+        return 
+    end
+    
+    local hrp = LocalPlayer.Character.HumanoidRootPart
+    local distance = (hrp.Position - targetCFrame.Position).Magnitude
+    
+    if distance > 1000 then
+        warn("Target too far for pathfinding:", distance)
+        return
+    end
+    
+    if distance < 50 then
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        LocalPlayer.Character:PivotTo(targetCFrame)
+        task.wait(TP_DELAY)
+        return
+    end
+
+    task.spawn(function()
+        local PathfindingService = getService("PathfindingService")
+        local success, path = pcall(function()
+            local path = PathfindingService:CreatePath({ 
+                AgentCanJump = true, 
+                AgentRadius = 3,
+                AgentHeight = 5,
+                AgentCanClimb = false
+            })
+            path:ComputeAsync(hrp.Position, targetCFrame.Position)
+            return path
+        end)
+        
+        if not success or not path then return end
+        
+        if path.Status == Enum.PathStatus.Success then
+            local waypoints = path:GetWaypoints()
+            local stepCount = math.min(4, #waypoints)
+            
+            for i = 1, stepCount do
+                if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    break
+                end
+                
+                local frac = i / stepCount
+                local idx = math.clamp(math.floor(frac * #waypoints) + 1, 1, #waypoints)
+                hrp.AssemblyLinearVelocity = Vector3.zero
+                LocalPlayer.Character:PivotTo(CFrame.new(waypoints[idx].Position + Vector3.new(0, 2.5, 0)))
+                task.wait(0.08)
+            end
+        end
+
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            LocalPlayer.Character:PivotTo(targetCFrame)
+            task.wait(TP_DELAY)
+        end
+    end)
+end
+
+local function getCurrentBasePosition()
+    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        return TP_POSITIONS.BASE1.INFO_POS
+    end
+    
+    local hrp = LocalPlayer.Character.HumanoidRootPart
+    local currentPos = hrp.Position
+    
+    local distToBase1 = (currentPos - TP_POSITIONS.BASE1.INFO_POS.Position).Magnitude
+    local distToBase2 = (currentPos - TP_POSITIONS.BASE2.INFO_POS.Position).Magnitude
+    
+    if distToBase1 < distToBase2 then
+        return TP_POSITIONS.BASE1.INFO_POS
+    else
+        return TP_POSITIONS.BASE2.INFO_POS
+    end
+end
+
+local function CreateMarker()
+    local currentBasePos = getCurrentBasePosition()
+    local markerPos = currentBasePos * CFrame.new(0, -3.2, 0)
+    
+    local part = workspace:FindFirstChild("myskypBest") or Instance.new("Part")
+    part.Name = "myskypBest"
+    part.Size = Vector3.new(1, 1, 1)
+    part.CFrame = markerPos
+    part.Anchored = true
+    part.CanCollide = false
+    part.Material = Enum.Material.Neon
+    part.Color = Color3.fromRGB(0, 255, 255)
+    part.Transparency = 0.3
+    part.Parent = workspace
+
+    if not part:FindFirstChild("MyskypBillboard") then
+        local gui = Instance.new("BillboardGui")
+        gui.Name = "MyskypBillboard"
+        gui.AlwaysOnTop = true
+        gui.Size = UDim2.new(0, 200, 0, 50)
+        gui.ExtentsOffset = Vector3.new(0, 3, 0)
+        gui.Parent = part
+        
+        local label = Instance.new("TextLabel")
+        label.Name = "Text"
+        label.BackgroundTransparency = 1
+        label.Size = UDim2.new(1, 0, 1, 0)
+        label.Font = Enum.Font.GothamBold
+        label.TextSize = 18
+        label.TextColor3 = Color3.new(1, 1, 1)
+        label.Text = ""
+        label.Parent = gui
+    end
+    
+    return part
+end
+
+local Marker = CreateMarker()
+
+-- ============ ЛОГИКА SET POSITION VISUALS ============
+local function UpdateCustomVisuals()
+    if not CustomPosCFrame then return end
+    
+    -- Проверяем ковер
+    local hasCarpet = LocalPlayer.Backpack:FindFirstChild("Flying Carpet") or (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Flying Carpet"))
+    
+    if not CustomPart then
+        CustomPart = Instance.new("Part")
+        CustomPart.Name = "CustomGrabPoint"
+        CustomPart.Size = Vector3.new(4, 0.2, 4)
+        CustomPart.Anchored = true
+        CustomPart.CanCollide = false
+        CustomPart.Material = Enum.Material.Neon
+        CustomPart.Color = Color3.fromRGB(0, 150, 255) -- Красивый синий
+        CustomPart.Transparency = 0.3
+        CustomPart.Parent = workspace
+        
+        local bb = Instance.new("BillboardGui")
+        bb.Name = "Info"
+        bb.Size = UDim2.new(0, 200, 0, 100)
+        bb.StudsOffset = Vector3.new(0, 4, 0)
+        bb.AlwaysOnTop = true
+        bb.Parent = CustomPart
+        
+        local txt = Instance.new("TextLabel")
+        txt.Size = UDim2.new(1,0,0,30)
+        txt.BackgroundTransparency = 1
+        txt.Text = "📍 CUSTOM POSITION"
+        txt.Font = Enum.Font.GothamBlack
+        txt.TextSize = 16
+        txt.TextColor3 = Color3.fromRGB(0, 200, 255)
+        txt.TextStrokeTransparency = 0.5
+        txt.Parent = bb
+        
+        local status = Instance.new("TextLabel")
+        status.Name = "Status"
+        status.Size = UDim2.new(1,0,0,20)
+        status.Position = UDim2.new(0,0,0,30)
+        status.BackgroundTransparency = 1
+        status.Text = "CHECKING..."
+        status.Font = Enum.Font.GothamBold
+        status.TextSize = 14
+        status.TextColor3 = Color3.fromRGB(255, 255, 255)
+        status.TextStrokeTransparency = 0.5
+        status.Parent = bb
+        
+        CustomAtt1 = Instance.new("Attachment")
+        CustomAtt1.Parent = CustomPart
+    end
+    
+    CustomPart.CFrame = CustomPosCFrame
+    
+    -- Обновляем луч (Beam)
+    if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+        local hrp = LocalPlayer.Character.HumanoidRootPart
+        local dist = (hrp.Position - CustomPosCFrame.Position).Magnitude
+        
+        if not CustomAtt0 or CustomAtt0.Parent ~= hrp then
+            CustomAtt0 = Instance.new("Attachment")
+            CustomAtt0.Parent = hrp
+        end
+        
+        if not CustomBeam then
+            CustomBeam = Instance.new("Beam")
+            CustomBeam.Texture = "rbxassetid://446111271"
+            CustomBeam.TextureSpeed = 2
+            CustomBeam.Width0 = 0.5
+            CustomBeam.Width1 = 2
+            CustomBeam.FaceCamera = true
+            CustomBeam.Transparency = NumberSequence.new(0.2)
+            CustomBeam.Parent = workspace
+        end
+        
+        CustomBeam.Attachment0 = CustomAtt0
+        CustomBeam.Attachment1 = CustomAtt1
+        
+        -- Логика цвета линии (Красная/Зеленая)
+        local isSafe = hasCarpet and dist < 2000 -- Условно 2000 стадов, можно менять
+        
+        if isSafe then
+            CustomBeam.Color = ColorSequence.new(Color3.fromRGB(0, 255, 100)) -- Зеленый
+            CustomPart.Info.Status.Text = string.format("✅ READY TO GRAB (%d studs)", math.floor(dist))
+            CustomPart.Info.Status.TextColor3 = Color3.fromRGB(100, 255, 100)
+        else
+            CustomBeam.Color = ColorSequence.new(Color3.fromRGB(255, 50, 50)) -- Красный
+            local reason = hasCarpet and "TOO FAR" or "NO CARPET"
+            CustomPart.Info.Status.Text = string.format("❌ UNSAFE: %s (%d studs)", reason, math.floor(dist))
+            CustomPart.Info.Status.TextColor3 = Color3.fromRGB(255, 50, 50)
+        end
+    end
+end
+
+-- Обновление линии каждый кадр
+game:GetService("RunService").Heartbeat:Connect(function()
+    if CustomPosCFrame then
+        UpdateCustomVisuals()
+    elseif CustomPart then
+        CustomPart:Destroy()
+        CustomPart = nil
+        if CustomBeam then CustomBeam:Destroy() CustomBeam = nil end
+    end
+end)
+
+local function createCosmicIndicator(name, position, color, text)
+    local part = Instance.new("Part")
+    part.Name = name
+    part.Size = Vector3.new(3.8, 0.3, 3.8)
+    part.Material = Enum.Material.Plastic
+    part.Color = color
+    part.Transparency = 0.57
+    part.Anchored = true
+    part.CanCollide = false
+    part.Position = position
+    part.Parent = workspace
+
+    local billboard = Instance.new("BillboardGui")
+    billboard.Size = UDim2.new(0, 200, 0, 50)
+    billboard.StudsOffset = Vector3.new(0, 4, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = part
+
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, 0, 1, 0)
+    textLabel.BackgroundTransparency = 1
+    textLabel.Text = text
+    textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    textLabel.TextStrokeTransparency = 0.3
+    textLabel.TextStrokeColor3 = color
+    textLabel.Font = Enum.Font.GothamBold
+    textLabel.TextSize = 18
+    textLabel.Parent = billboard
+
+    return part
+end
+
+task.spawn(function()
+    createCosmicIndicator("CosmicStandHereBase1", Vector3.new(-334.84, -5.40, 101.02), Color3.fromRGB(39, 39, 39), " STAND HERE (BASE 1) ")
+    createCosmicIndicator("CosmicTeleportHereBase1", Vector3.new(-352.98, -7.30, 74.3), Color3.fromRGB(255, 100, 100), " TELEPORT HERE (BASE 1) ")
+    createCosmicIndicator("CosmicStandHereBase2", Vector3.new(-334.84, -5.40, 19.20), Color3.fromRGB(39, 39, 39), " STAND HERE (BASE 2) ")
+    createCosmicIndicator("CosmicTeleportHereBase2", Vector3.new(-352.98, -7.30, 45.76), Color3.fromRGB(100, 150, 255), " TELEPORT HERE (BASE 2) ")
+end)
+
+local function initializeEventConnections()
+    local RunService = getService("RunService")
+    
+    local promptConn = ProximityPromptService.PromptButtonHoldEnded:Connect(function(prompt, who)
+        if who ~= LocalPlayer then return end
+        if prompt.Name ~= "Steal" and prompt.ActionText ~= "Steal" and prompt.ObjectText ~= "Steal" then return end
+        
+        warn("STEAL DETECTED")
+        
+        if not TPSysEnabled then
+            warn("TP System OFF")
+            return
+        end
+        
+        local character = LocalPlayer.Character
+        if not character then return end
+        
+        local hrp = character:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+        
+        local backpack = LocalPlayer:FindFirstChild("Backpack")
+        if backpack then
+            local carpet = backpack:FindFirstChild("Flying Carpet")
+            if carpet and character:FindFirstChild("Humanoid") then
+                character.Humanoid:EquipTool(carpet)
+                task.wait(0.1)
+            end
+        end
+        
+        local currentBasePos = getCurrentBasePosition()
+        
+        -- ЕСЛИ УСТАНОВЛЕНА СВОЯ ПОЗИЦИЯ - ТЕПАЕМСЯ ТУДА
+        if CustomPosCFrame then
+            hrp.CFrame = CustomPosCFrame
+            print("TPED To CUSTOM POSITION")
+        elseif currentBasePos == TP_POSITIONS.BASE1.INFO_POS then
+            hrp.CFrame = TP_POSITIONS.BASE1.TELEPORT_POS
+            print("TPED To Base 1")
+        else
+            hrp.CFrame = TP_POSITIONS.BASE2.TELEPORT_POS
+            print("TPED To Base 2")
+        end
+        
+        -- ВЫЗЫВАЕМ АВТОГРАБ ПОСЛЕ ТП
+        autoClickNearbyPrompt()
+    end)
+    table.insert(connections, promptConn)
+    
+    local heartbeatConn = RunService.Heartbeat:Connect(function(deltaTime)
+        lastMarkerUpdate = lastMarkerUpdate + deltaTime
+        if lastMarkerUpdate < MARKER_UPDATE_INTERVAL then return end
+        lastMarkerUpdate = 0
+        
+        local character = LocalPlayer.Character
+        if not character then return end
+        
+        local hrp = character:FindFirstChild("HumanoidRootPart")
+        if not hrp then return end
+        
+        local currentBasePos = getCurrentBasePosition()
+        local markerPos = currentBasePos * CFrame.new(0, -3.2, 0)
+        
+        if Marker and Marker.Parent then
+            Marker.CFrame = markerPos
+            local dist = (hrp.Position - currentBasePos.Position).Magnitude
+            Marker.Color = dist < 7 and Color3.fromRGB(0, 255, 100) or Color3.fromRGB(255, 50, 50)
+        end
+    end)
+    table.insert(connections, heartbeatConn)
+    
+    print("Event connections initialized")
+end
+
+task.spawn(initializeEventConnections)
+
+local KEYWORD = "You stole"
+local KICK_MESSAGE = "EZZ"
+
+local function hasKeyword(text)
+    return typeof(text) == "string" and text:lower():find(KEYWORD, 1, true) ~= nil
+end
+
+local function watchObject(obj)
+    if not (obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox")) then return end
+    
+    if obj.Visible and obj.Text and hasKeyword(obj.Text) then
+        task.spawn(function()
+            pcall(function() LocalPlayer:Kick(KICK_MESSAGE) end)
+        end)
+        return
+    end
+    
+    if obj.Visible then
+        local conn = obj:GetPropertyChangedSignal("Text"):Connect(function()
+            if hasKeyword(obj.Text) then
+                task.spawn(function()
+                    pcall(function() LocalPlayer:Kick(KICK_MESSAGE) end)
+                end)
+            end
+        end)
+        table.insert(connections, conn)
+    end
+end
+
+local lastScanTime = 0
+local SCAN_COOLDOWN = 0.5
+local MAX_SCAN_TIME = 0.016
+
+local function optimizedScanDescendants(parent)
+    local currentTime = tick()
+    if currentTime - lastScanTime < SCAN_COOLDOWN then return end
+    
+    local startTime = tick()
+    if tick() - startTime > MAX_SCAN_TIME then
+        warn("Scan would take too long, skipping...")
+        return
+    end
+    
+    lastScanTime = currentTime
+    
+    task.spawn(function()
+        local textObjects = {}
+        local batchSize = 15
+        
+        for _, obj in ipairs(parent:GetDescendants()) do
+            if tick() - startTime > MAX_SCAN_TIME then
+                warn("Scan timeout - stopping early")
+                break
+            end
+            
+            if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+                if obj.Visible and obj.Text then
+                    table.insert(textObjects, obj)
+                end
+            end
+        end
+        
+        for i = 1, #textObjects, batchSize do
+            local endIdx = math.min(i + batchSize - 1, #textObjects)
+            for j = i, endIdx do
+                watchObject(textObjects[j])
+            end
+            task.wait(0.05)
+        end
+        
+        warn("Scan completed in " .. (tick() - startTime) .. " seconds, objects: " .. #textObjects)
+    end)
+end
+
+local childAddedDebounce = false
+local function debouncedWatchObject(obj)
+    if not childAddedDebounce then
+        childAddedDebounce = true
+        watchObject(obj)
+        childAddedDebounce = false
+    end
+end
+
+task.spawn(function()
+    local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+    
+    task.wait(2)
+    optimizedScanDescendants(PlayerGui)
+    
+    local childAddedConn = PlayerGui.ChildAdded:Connect(function(gui)
+        task.wait(0.1)
+        if gui:IsA("ScreenGui") then
+            optimizedScanDescendants(gui)
+        else
+            debouncedWatchObject(gui)
+        end
+    end)
+    table.insert(connections, childAddedConn)
+    
+    local descendantAddedConn = PlayerGui.DescendantAdded:Connect(debouncedWatchObject)
+    table.insert(connections, descendantAddedConn)
+end)
+
+task.spawn(function()
+    local playerLeavingConn = Players.PlayerRemoving:Connect(function(player)
+        if player == LocalPlayer then
+            cleanup()
+            _G.MyskypInstaSteal = false
+            pcall(_G.MySkyCleanup)
+        end
+    end)
+    table.insert(connections, playerLeavingConn)
+end)
+
+-- Desync system
+local FFlags = {
     GameNetPVHeaderRotationalVelocityZeroCutoffExponent = -5000,
     LargeReplicatorWrite5 = true,
     LargeReplicatorEnabled9 = true,
@@ -49,508 +679,592 @@ local fflags = {
     LargeReplicatorSerializeWrite4 = true
 }
 
-local function setfflags()
-    for k, v in pairs(fflags) do
+local desyncFirstActivation = true
+local desyncPermanentlyActivated = false
+
+local function applyFFlags(flags)
+    for name, value in pairs(flags) do
         pcall(function()
-            setfflag(k, tostring(v))
+            setfflag(tostring(name), tostring(value))
         end)
     end
 end
 
-local function forceRespawn()
-    local char = lp.Character
-    if not char then return end
-
-    local humanoid = char:FindFirstChildOfClass("Humanoid")
-    if humanoid then
-        humanoid:ChangeState(Enum.HumanoidStateType.Dead)
+local function respawn(plr)
+    local char = plr.Character
+    if char then
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum:ChangeState(Enum.HumanoidStateType.Dead)
+        end
+        char:ClearAllChildren()
+        local newChar = Instance.new("Model")
+        newChar.Parent = workspace
+        plr.Character = newChar
+        task.wait()
+        plr.Character = char
+        newChar:Destroy()
     end
-
-    char:ClearAllChildren()
-
-    local dummy = Instance.new("Model")
-    dummy.Parent = Workspace
-    lp.Character = dummy
-    task.wait()
-    lp.Character = char
-    dummy:Destroy()
 end
 
--- Base Zones
-local bases = {
-    Base1 = {
-        center = Vector3.new(-335.65, -5.40, 14),
-        positions = {
-            Vector3.new(-335.65, -5.40, -10.99),
-            Vector3.new(-336.05, -5.34, 18.08)
-        }
-    },
-    Base2 = {
-        center = Vector3.new(-335.41, -5.40, 114),
-        positions = {
-            Vector3.new(-335.41, -5.40, 102.42),
-            Vector3.new(-334.89, -5.40, 125.81)
-        }
-    }
-}
-
-local currentBase = nil
-
-local function isOnBase(pos, radius)
-    local root = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
-    return root and (root.Position - pos).Magnitude <= (radius or 5)
+local function applyPermanentDesync()
+    applyFFlags(FFlags)
+    if desyncFirstActivation then
+        respawn(LocalPlayer)
+        desyncFirstActivation = false
+    end
+    desyncPermanentlyActivated = true
 end
 
-local function detectCurrentBase()
-    local root = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
-    if not root then return nil end
+_G.MySkyCleanup = function()
+    cleanup()
     
-    for name, data in pairs(bases) do
-        if (root.Position - data.center).Magnitude < 30 then
-            return name
+    for _, part in ipairs(workspace:GetChildren()) do
+        if part.Name:find("myskyp") or part.Name:find("Cosmic") or part.Name == "CustomGrabPoint" then
+            pcall(function() part:Destroy() end)
         end
     end
-    return nil
-end
-
--- Cosmic Indicators
-local function createCosmicIndicator(name, position, color, text)
-    local part = Instance.new("Part")
-    part.Name = name
-    part.Size = Vector3.new(3.8, 0.3, 3.8)
-    part.Material = Enum.Material.Plastic
-    part.Color = color
-    part.Transparency = 0.57
-    part.Anchored = true
-    part.CanCollide = false
-    part.Position = position
-    part.Parent = Workspace
-
-    local billboard = Instance.new("BillboardGui")
-    billboard.Size = UDim2.new(0, 200, 0, 50)
-    billboard.StudsOffset = Vector3.new(0, 4, 0)
-    billboard.AlwaysOnTop = true
-    billboard.Parent = part
-
-    local textLabel = Instance.new("TextLabel")
-    textLabel.Size = UDim2.new(1, 0, 1, 0)
-    textLabel.BackgroundTransparency = 1
-    textLabel.Text = text
-    textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    textLabel.TextStrokeTransparency = 0.3
-    textLabel.TextStrokeColor3 = color
-    textLabel.Font = Enum.Font.GothamBold
-    textLabel.TextSize = 18
-    textLabel.Parent = billboard
-
-    return part
-end
-
-task.spawn(function()
-    createCosmicIndicator("CosmicBase1_1", bases.Base1.positions[1], Color3.fromRGB(255, 50, 50), "BASE 1 - SPOT 1")
-    createCosmicIndicator("CosmicBase1_2", bases.Base1.positions[2], Color3.fromRGB(255, 50, 50), "BASE 1 - SPOT 2")
-    createCosmicIndicator("CosmicBase2_1", bases.Base2.positions[1], Color3.fromRGB(50, 150, 255), "BASE 2 - SPOT 1")
-    createCosmicIndicator("CosmicBase2_2", bases.Base2.positions[2], Color3.fromRGB(50, 150, 255), "BASE 2 - SPOT 2")
-end)
-
--- Main UI
-local sg = Instance.new("ScreenGui")
-sg.Parent = lp:WaitForChild("PlayerGui")
-sg.ResetOnSpawn = false
-sg.Name = "CapyInstaStealGUI"
-
-local main = Instance.new("Frame", sg)
-main.Size = UDim2.fromOffset(320, 450)
-main.Position = UDim2.fromScale(0.5, 0.5)
-main.AnchorPoint = Vector2.new(0.5, 0.5)
-main.BackgroundColor3 = Color3.fromRGB(15, 18, 25)
-main.Active = true
-main.Draggable = true
-Instance.new("UICorner", main).CornerRadius = UDim.new(0, 14)
-
-local stroke = Instance.new("UIStroke", main)
-stroke.Color = Color3.fromRGB(120, 160, 255)
-stroke.Thickness = 2.5
-stroke.Transparency = 0.2
-
-local grad = Instance.new("UIGradient", main)
-grad.Color = ColorSequence.new{
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(25, 30, 40)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(15, 18, 25))
-}
-grad.Rotation = 135
-
--- Header
-local header = Instance.new("Frame", main)
-header.Size = UDim2.new(1, 0, 0, 60)
-header.BackgroundColor3 = Color3.fromRGB(50, 60, 80)
-header.BorderSizePixel = 0
-Instance.new("UICorner", header).CornerRadius = UDim.new(0, 14)
-
-local headerStroke = Instance.new("UIStroke", header)
-headerStroke.Color = Color3.fromRGB(120, 160, 255)
-headerStroke.Thickness = 1.5
-
-local title = Instance.new("TextLabel", header)
-title.Size = UDim2.new(1, 0, 0, 30)
-title.Position = UDim2.fromOffset(0, 5)
-title.BackgroundTransparency = 1
-title.Text = "🐹 CAPY INSTA STEAL"
-title.Font = Enum.Font.GothamBlack
-title.TextSize = 20
-title.TextColor3 = Color3.fromRGB(255, 255, 255)
-
-local subtitle = Instance.new("TextLabel", header)
-subtitle.Size = UDim2.new(1, 0, 0, 20)
-subtitle.Position = UDim2.fromOffset(0, 35)
-subtitle.BackgroundTransparency = 1
-subtitle.Text = "by ARTFUL & MYSKYP"
-subtitle.Font = Enum.Font.GothamBold
-subtitle.TextSize = 12
-subtitle.TextColor3 = Color3.fromRGB(180, 200, 255)
-
--- Status display
-local statusContainer = Instance.new("Frame", main)
-statusContainer.Size = UDim2.new(1, -20, 0, 70)
-statusContainer.Position = UDim2.fromOffset(10, 70)
-statusContainer.BackgroundColor3 = Color3.fromRGB(25, 30, 40)
-Instance.new("UICorner", statusContainer).CornerRadius = UDim.new(0, 10)
-
-local statusStroke = Instance.new("UIStroke", statusContainer)
-statusStroke.Color = Color3.fromRGB(100, 150, 255)
-statusStroke.Thickness = 1.5
-statusStroke.Transparency = 0.5
-
-local baseLabel = Instance.new("TextLabel", statusContainer)
-baseLabel.Size = UDim2.new(1, -10, 0, 25)
-baseLabel.Position = UDim2.fromOffset(5, 5)
-baseLabel.BackgroundTransparency = 1
-baseLabel.Text = "📍 Current Base: None"
-baseLabel.Font = Enum.Font.GothamBold
-baseLabel.TextSize = 13
-baseLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
-baseLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-local statusLabel = Instance.new("TextLabel", statusContainer)
-statusLabel.Size = UDim2.new(1, -10, 0, 20)
-statusLabel.Position = UDim2.fromOffset(5, 30)
-statusLabel.BackgroundTransparency = 1
-statusLabel.Text = "⚡ Status: Ready"
-statusLabel.Font = Enum.Font.Gotham
-statusLabel.TextSize = 12
-statusLabel.TextColor3 = Color3.fromRGB(150, 255, 150)
-statusLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-local tpCheckLabel = Instance.new("TextLabel", statusContainer)
-tpCheckLabel.Size = UDim2.new(1, -10, 0, 20)
-tpCheckLabel.Position = UDim2.fromOffset(5, 50)
-tpCheckLabel.BackgroundTransparency = 1
-tpCheckLabel.Text = ""
-tpCheckLabel.Font = Enum.Font.GothamBold
-tpCheckLabel.TextSize = 11
-tpCheckLabel.TextColor3 = Color3.fromRGB(255, 255, 100)
-tpCheckLabel.TextXAlignment = Enum.TextXAlignment.Left
-
--- Button maker
-local function btn(txt, y, emoji)
-    local b = Instance.new("TextButton", main)
-    b.Size = UDim2.new(1, -40, 0, 40)
-    b.Position = UDim2.fromOffset(20, y)
-    b.Text = (emoji and emoji .. " " or "") .. txt
-    b.Font = Enum.Font.GothamBold
-    b.TextSize = 14
-    b.TextColor3 = Color3.fromRGB(255, 255, 255)
-    b.BackgroundColor3 = Color3.fromRGB(50, 60, 80)
-    b.AutoButtonColor = false
-    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 10)
-
-    local s = Instance.new("UIStroke", b)
-    s.Color = Color3.fromRGB(120, 160, 255)
-    s.Thickness = 2
-    s.Transparency = 0.4
-
-    b.MouseEnter:Connect(function()
-        TweenService:Create(b, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(80, 90, 120)}):Play()
-        TweenService:Create(s, TweenInfo.new(0.2), {Transparency = 0.1}):Play()
-    end)
-
-    b.MouseLeave:Connect(function()
-        TweenService:Create(b, TweenInfo.new(0.2), {BackgroundColor3 = Color3.fromRGB(50, 60, 80)}):Play()
-        TweenService:Create(s, TweenInfo.new(0.2), {Transparency = 0.4}):Play()
-    end)
-
-    return b
-end
-
-local setpos = btn("SET POSITION", 155, "📌")
-local desync = btn("ENABLE DESYNC", 205, "🔄")
-local unwalk = btn("UNWALK ANIM", 255, "🚫")
-local autoTpLeft = btn("AUTO TP LEFT", 305, "⬅️")
-local autoTpRight = btn("AUTO TP RIGHT", 355, "➡️")
-
--- Variables
-local posA, posB
-local beamA, beamB
-local partA, partB
-local unwalkActive = false
-local unwalkConn
-
--- Beam maker
-local function makeBeam(targetPos, slot)
-    local root = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-
-    local anchor = Instance.new("Part")
-    anchor.Anchored = true
-    anchor.CanCollide = false
-    anchor.Transparency = 1
-    anchor.CFrame = CFrame.new(targetPos)
-    anchor.Parent = Workspace
-
-    local att0 = Instance.new("Attachment", anchor)
-    local att1 = Instance.new("Attachment", root)
-
-    local b = Instance.new("Beam")
-    b.Attachment0 = att0
-    b.Attachment1 = att1
-    b.Width0 = 0.8
-    b.Width1 = 0.8
-    b.FaceCamera = true
-    b.LightEmission = 0.95
-    b.Color = ColorSequence.new{
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(120, 160, 255)),
-        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 255, 100)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(120, 160, 255))
-    }
-    b.Transparency = NumberSequence.new{
-        NumberSequenceKeypoint.new(0, 0.3),
-        NumberSequenceKeypoint.new(0.5, 0.1),
-        NumberSequenceKeypoint.new(1, 0.3)
-    }
-    b.Parent = Workspace
-
-    if slot == 1 then
-        if beamA then beamA:Destroy() end
-        if partA then partA:Destroy() end
-        beamA, partA = b, anchor
-    else
-        if beamB then beamB:Destroy() end
-        if partB then partB:Destroy() end
-        beamB, partB = b, anchor
-    end
-end
-
--- Check if brainrot exists near position
-local function checkBrainrotNearPosition(position, radius)
-    radius = radius or 10
     
-    for _, obj in pairs(Workspace:GetDescendants()) do
-        if obj:IsA("Model") and obj.Name:lower():find("brainrot") then
-            local primaryPart = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
-            if primaryPart then
-                local distance = (primaryPart.Position - position).Magnitude
-                if distance <= radius then
-                    return true, distance, obj.Name
-                end
+    local CoreGui = getService("CoreGui")
+    local existingGui = CoreGui:FindFirstChild("SemiInstaSteal")
+    if existingGui then
+        pcall(function() existingGui:Destroy() end)
+    end
+    
+    _G.MyskypInstaSteal = false
+    _G.MySkyConnections = nil
+end
+
+local function executeTP()
+    if tick() - lastTeleportTime < TELEPORT_COOLDOWN then 
+        warn("Teleport on cooldown! Wait", TELEPORT_COOLDOWN - (tick() - lastTeleportTime), "seconds")
+        return false
+    end
+    
+    lastTeleportTime = tick()
+    
+    local Character = LocalPlayer.Character
+    if not Character then
+        Character = LocalPlayer.CharacterAdded:Wait()
+    end
+    
+    local Humanoid = Character:WaitForChild("Humanoid")
+    local HRP = Character:WaitForChild("HumanoidRootPart")
+    
+    local Carpet = Character:FindFirstChild("Flying Carpet") or LocalPlayer.Backpack:FindFirstChild("Flying Carpet")
+    if not Carpet then
+        warn("Flying Carpet not found!")
+        return false
+    end
+    
+    local currentBasePos = getCurrentBasePosition()
+    local isAtBase1 = currentBasePos == TP_POSITIONS.BASE1.INFO_POS
+    
+    print("[DEBUG] Current base detected:", isAtBase1 and "BASE 1" or "BASE 2")
+    
+    task.spawn(function()
+        Humanoid:EquipTool(Carpet)
+        
+        -- ЕСЛИ ЕСТЬ КАСТОМНАЯ ПОЗИЦИЯ
+        if CustomPosCFrame then
+            HRP.CFrame = CustomPosCFrame
+        elseif isAtBase1 then
+            HRP.CFrame = CFrame.new(-351.49, -6.65, 113.72)
+            task.wait(0.15)
+            HRP.CFrame = CFrame.new(-378.14, -6.00, 26.43)
+            task.wait(0.15)
+            HRP.CFrame = CFrame.new(-334.80, -5.04, 18.90)
+        else
+            HRP.CFrame = CFrame.new(-352.54, -6.83, 6.66)
+            task.wait(0.15)
+            HRP.CFrame = CFrame.new(-372.90, -6.20, 102.00)
+            task.wait(0.15)
+            HRP.CFrame = CFrame.new(-335.08, -5.10, 101.40)
+        end
+        
+        autoClickNearbyPrompt()
+    end)
+    
+    return true
+end
+
+local localPlayer = Players.LocalPlayer
+
+local themeColors = {
+    bg = Color3.fromRGB(15, 18, 25),
+    card = Color3.fromRGB(50, 60, 80),
+    accent = Color3.fromRGB(120, 160, 255),
+    text = Color3.fromRGB(255, 255, 255),
+    green = Color3.fromRGB(100, 255, 120),
+    greenGlow = Color3.fromRGB(120, 255, 140),
+    red = Color3.fromRGB(255, 100, 100),
+    yellow = Color3.fromRGB(255, 220, 80)
+}
+
+local function createToggle(parent, name, text, yPos)
+    local toggle = Instance.new("TextButton")
+    toggle.Name = name
+    toggle.Size = UDim2.new(1, -20, 0, 35)
+    toggle.Position = UDim2.new(0, 10, 0, yPos)
+    toggle.BackgroundColor3 = themeColors.card
+    toggle.BackgroundTransparency = 0
+    toggle.BorderSizePixel = 0
+    toggle.Text = ""
+    toggle.AutoButtonColor = false
+    toggle.Parent = parent
+    
+    Instance.new("UICorner", toggle).CornerRadius = UDim.new(0, 8)
+    
+    local stroke = Instance.new("UIStroke", toggle)
+    stroke.Color = themeColors.accent
+    stroke.Thickness = 2
+    stroke.Transparency = 0.3
+    
+    local label = Instance.new("TextLabel")
+    label.Name = "Label"
+    label.Parent = toggle
+    label.BackgroundTransparency = 1
+    label.Position = UDim2.new(0, 15, 0, 0)
+    label.Size = UDim2.new(1, -70, 1, 0)
+    label.Text = text
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 14
+    label.TextColor3 = themeColors.text
+    label.TextXAlignment = Enum.TextXAlignment.Left
+    
+    local switch = Instance.new("Frame")
+    switch.Name = "Switch"
+    switch.Parent = toggle
+    switch.Size = UDim2.new(0, 45, 0, 24)
+    switch.Position = UDim2.new(1, -55, 0.5, -12)
+    switch.BackgroundColor3 = themeColors.red
+    switch.BorderSizePixel = 0
+    
+    Instance.new("UICorner", switch).CornerRadius = UDim.new(0, 12)
+    
+    local switchStroke = Instance.new("UIStroke", switch)
+    switchStroke.Color = Color3.fromRGB(255, 255, 255)
+    switchStroke.Thickness = 1.5
+    switchStroke.Transparency = 0.6
+    
+    local knob = Instance.new("Frame")
+    knob.Name = "Knob"
+    knob.Parent = switch
+    knob.Size = UDim2.new(0, 18, 0, 18)
+    knob.Position = UDim2.new(0, 3, 0, 3)
+    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    knob.BorderSizePixel = 0
+    
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(0, 9)
+    
+    return toggle, switch, knob
+end
+
+local function updateToggleUI(toggleFrame, knob, isEnabled)
+    TweenService:Create(toggleFrame, TweenInfo.new(0.2), {
+        BackgroundColor3 = isEnabled and themeColors.green or themeColors.red
+    }):Play()
+    
+    TweenService:Create(knob, TweenInfo.new(0.2), {
+        Position = isEnabled and UDim2.new(1, -21, 0, 3) or UDim2.new(0, 3, 0, 3)
+    }):Play()
+end
+
+local function loadMainUI()
+    local playerGui = localPlayer:WaitForChild("PlayerGui")
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "CleanAdminGUI"
+    screenGui.ResetOnSpawn = false
+    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+    screenGui.Parent = playerGui
+
+    local mainFrame = Instance.new("Frame")
+    mainFrame.Name = "MainFrame"
+    mainFrame.Size = UDim2.new(0, 300, 0, IS_MOBILE and 300 or 380) -- УВЕЛИЧИЛИ РАЗМЕР
+    mainFrame.Position = UDim2.new(1, 350, 0, 60)
+    mainFrame.BackgroundColor3 = themeColors.bg
+    mainFrame.BackgroundTransparency = 0.05
+    mainFrame.BorderSizePixel = 0
+    mainFrame.Parent = screenGui
+
+    Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
+    
+    local mainStroke = Instance.new("UIStroke", mainFrame)
+    mainStroke.Color = themeColors.accent
+    mainStroke.Thickness = 2.5
+    mainStroke.Transparency = 0.2
+
+    local gradient = Instance.new("UIGradient", mainFrame)
+    gradient.Color = ColorSequence.new{
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(25, 30, 40)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(15, 18, 25))
+    }
+    gradient.Rotation = 135
+
+    local header = Instance.new("TextButton")
+    header.Name = "Header"
+    header.Size = UDim2.new(1, 0, 0, 55)
+    header.BackgroundColor3 = themeColors.card
+    header.BorderSizePixel = 0
+    header.Text = ""
+    header.AutoButtonColor = false
+    header.Parent = mainFrame
+
+    Instance.new("UICorner", header).CornerRadius = UDim.new(0, 12)
+    
+    local headerStroke = Instance.new("UIStroke", header)
+    headerStroke.Color = themeColors.accent
+    headerStroke.Thickness = 1.5
+
+    local title = Instance.new("TextLabel")
+    title.Name = "Title"
+    title.Parent = header
+    title.BackgroundTransparency = 1
+    title.Position = UDim2.new(0, 15, 0, -5)
+    title.Size = UDim2.new(1, -30, 1, 0)
+    title.Text = "♥ SEMI INSTA STEAL FROM:"
+    title.Font = Enum.Font.GothamBlack
+    title.TextSize = 17
+    title.TextColor3 = themeColors.text
+    title.TextXAlignment = Enum.TextXAlignment.Left
+
+    local subtitle = Instance.new("TextLabel")
+    subtitle.Name = "Subtitle"
+    subtitle.Parent = header
+    subtitle.BackgroundTransparency = 1
+    subtitle.Position = UDim2.new(0, 15, 0, 28)
+    subtitle.Size = UDim2.new(1, -30, 0, 20)
+    subtitle.Text = "ARTFUL AND MYSKYP ♥"
+    subtitle.Font = Enum.Font.GothamBold
+    subtitle.TextSize = 13
+    subtitle.TextColor3 = Color3.fromRGB(200, 220, 255)
+    subtitle.TextXAlignment = Enum.TextXAlignment.Left
+
+    local togglesFrame = Instance.new("Frame")
+    togglesFrame.Name = "TogglesFrame"
+    togglesFrame.Size = UDim2.new(1, -20, 0, 45)
+    togglesFrame.Position = UDim2.new(0, 10, 0, 65)
+    togglesFrame.BackgroundTransparency = 1
+    togglesFrame.Parent = mainFrame
+
+    local autoDefenseToggle, autoDefenseSwitch, autoDefenseKnob = createToggle(togglesFrame, "AutoDefenseToggle", "🎮 Teleport System", 0)
+    local activateWorkToggle, activateWorkSwitch, activateWorkKnob = createToggle(togglesFrame, "ActivateWorkToggle", "💻 Activate To Work", 40)
+    
+    local TpToggleRight, TpSwitchRight, TpKnobRight
+    if IS_PC then
+        TpToggleRight, TpSwitchRight, TpKnobRight = createToggle(togglesFrame, "TpToggleRight", "⚡ TP To Pet (G)", 160)
+    end
+    
+    -- ============ НОВАЯ КНОПКА SET POS ============
+    local setPosButton = Instance.new("TextButton")
+    setPosButton.Name = "SetPosBtn"
+    setPosButton.Size = UDim2.new(1, -20, 0, 35)
+    setPosButton.Position = UDim2.new(0, 10, 0, 120)
+    setPosButton.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+    setPosButton.Text = "📍 Set Custom Position"
+    setPosButton.Font = Enum.Font.GothamBold
+    setPosButton.TextSize = 14
+    setPosButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    setPosButton.Parent = togglesFrame
+    Instance.new("UICorner", setPosButton).CornerRadius = UDim.new(0, 8)
+    
+    local setPosStroke = Instance.new("UIStroke", setPosButton)
+    setPosStroke.Color = Color3.fromRGB(255, 255, 255)
+    setPosStroke.Transparency = 0.5
+    setPosStroke.Thickness = 1.5
+    
+    setPosButton.MouseButton1Click:Connect(function()
+        if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+            CustomPosCFrame = LocalPlayer.Character.HumanoidRootPart.CFrame
+            print("Custom Position Set!")
+            setPosButton.Text = "📍 Position Saved!"
+            task.wait(1)
+            setPosButton.Text = "📍 Set Custom Position"
+        end
+    end)
+
+    local autoDefenseEnabled = true
+    local activateWorkEnabled = false
+    local TpRightEnabled = false
+
+    task.spawn(function()
+        task.wait(1.3)
+        if autoDefenseSwitch and autoDefenseKnob then
+            autoDefenseSwitch.BackgroundColor3 = themeColors.green
+            autoDefenseKnob.Position = UDim2.new(1, -21, 0, 3)
+        end
+        
+        if TpSwitchRight and TpKnobRight then
+            TpSwitchRight.BackgroundColor3 = themeColors.red
+            TpKnobRight.Position = UDim2.new(0, 3, 0, 3)
+        end
+        
+        if activateWorkSwitch and activateWorkKnob then
+            activateWorkSwitch.BackgroundColor3 = themeColors.red
+            activateWorkKnob.Position = UDim2.new(0, 3, 0, 3)
+        end
+    end)
+
+    if TpToggleRight then
+        TpToggleRight.MouseButton1Click:Connect(function()
+            TpRightEnabled = not TpRightEnabled
+            
+            if TpRightEnabled then
+                updateToggleUI(TpSwitchRight, TpKnobRight, true)
+                executeTP()
+            else
+                updateToggleUI(TpSwitchRight, TpKnobRight, false)
             end
-        end
+        end)
     end
-    
-    return false, nil, nil
-end
 
--- Set Position button with TP check
-setpos.MouseButton1Click:Connect(function()
-    local root = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-    
-    posA = root.CFrame
-    makeBeam(posA.Position, 1)
-    statusLabel.Text = "⚡ Status: Position Set"
-    
-    -- Check for brainrot near position
+    if IS_PC then
+        UserInputService.InputBegan:Connect(function(input, gameProcessed)
+            if input.KeyCode == Enum.KeyCode.G and not gameProcessed then
+                if TpSwitchRight and TpKnobRight then
+                    updateToggleUI(TpSwitchRight, TpKnobRight, true)
+                    TpRightEnabled = true
+                end
+                
+                executeTP()
+                
+                task.spawn(function()
+                    task.wait(0.5)
+                    if TpSwitchRight and TpKnobRight then
+                        updateToggleUI(TpSwitchRight, TpKnobRight, false)
+                        TpRightEnabled = false
+                    end
+                end)
+            end
+        end)
+    end
+
+    local footer = Instance.new("Frame")
+    footer.Name = "Footer"
+    footer.Size = UDim2.new(1, -20, 0, 35)
+    footer.Position = UDim2.new(0, 10, 1, -45)
+    footer.BackgroundTransparency = 1
+    footer.Parent = mainFrame
+
+    local versionLabel2 = Instance.new("TextLabel")
+    versionLabel2.Name = "VersionLabel"
+    versionLabel2.Size = UDim2.new(1, 0, 1, 0)
+    versionLabel2.BackgroundTransparency = 1
+    versionLabel2.Text = "Capybara 🐹"
+    versionLabel2.Font = Enum.Font.GothamBold
+    versionLabel2.TextSize = 13
+    versionLabel2.TextColor3 = Color3.fromRGB(180, 200, 255)
+    versionLabel2.TextXAlignment = Enum.TextXAlignment.Center
+    versionLabel2.Parent = footer
+
     task.spawn(function()
         task.wait(0.5)
-        local hasBrainrot, distance, brainrotName = checkBrainrotNearPosition(posA.Position, 15)
         
-        if hasBrainrot then
-            tpCheckLabel.Text = string.format("✅ BRAINROT DETECTED! (%.1fm)", distance)
-            tpCheckLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
-            statusStroke.Color = Color3.fromRGB(100, 255, 100)
+        TweenService:Create(mainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Position = UDim2.new(1, -320, 0, 60),
+            BackgroundTransparency = 0.05
+        }):Play()
+    end)
+
+    autoDefenseToggle.MouseButton1Click:Connect(function()
+        autoDefenseEnabled = not autoDefenseEnabled
+        updateToggleUI(autoDefenseSwitch, autoDefenseKnob, autoDefenseEnabled)
+        
+        TPSysEnabled = autoDefenseEnabled
+        
+        if not TPSysEnabled then
+            if Marker and Marker.Parent then
+                pcall(function() Marker:Destroy() end)
+            end
         else
-            tpCheckLabel.Text = "❌ NO BRAINROT NEARBY!"
-            tpCheckLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
-            statusStroke.Color = Color3.fromRGB(255, 100, 100)
+            Marker = CreateMarker()
+        end
+    end)
+
+    activateWorkToggle.MouseButton1Click:Connect(function()
+        if desyncPermanentlyActivated then
+            return
         end
         
-        task.wait(3)
-        tpCheckLabel.Text = ""
-        statusStroke.Color = Color3.fromRGB(100, 150, 255)
-    end)
-end)
-
--- Desync button
-desync.MouseButton1Click:Connect(function()
-    setfflags()
-    forceRespawn()
-    statusLabel.Text = "⚡ Status: Desync Enabled"
-    
-    task.spawn(function()
-        task.wait(2)
-        statusLabel.Text = "⚡ Status: Ready"
-    end)
-end)
-
--- Unwalk animation
-unwalk.MouseButton1Click:Connect(function()
-    local char = lp.Character
-    if not char then return end
-
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-
-    local anim = hum:FindFirstChildWhichIsA("Animator")
-    if not anim then return end
-
-    if unwalkActive then
-        if unwalkConn then unwalkConn:Disconnect() unwalkConn = nil end
-        statusLabel.Text = "⚡ Status: Animations Restored"
-        unwalk.Text = "🚫 UNWALK ANIM"
-        unwalkActive = false
-    else
-        if unwalkConn then unwalkConn:Disconnect() unwalkConn = nil end
-
-        unwalkConn = RunService.Heartbeat:Connect(function()
-            for _, track in pairs(anim:GetPlayingAnimationTracks()) do
-                track:Stop()
-                track:AdjustSpeed(0)
+        activateWorkToggle.AutoButtonColor = false
+        activateWorkToggle.Active = false
+        
+        local label = activateWorkToggle:FindFirstChild("Label")
+        
+        task.spawn(function()
+            if label then
+                label.Text = "💻 Preparing..."
             end
+            
+            if desyncFirstActivation then
+                respawn(LocalPlayer)
+                desyncFirstActivation = false
+                applyPermanentDesync()
+            end
+            
+            task.wait(1.5)
+            
+            if label then
+                label.Text = "💻 Almost done..."
+            end
+            task.wait(2)
+            
+            if label then
+                label.Text = "💻 Continue..."
+            end
+
+            if label then
+                label.Text = "💻 Done!"
+                task.wait(0.5)
+                label.Text = "💻 Ready To Work"
+            end
+            
+            activateWorkEnabled = true
+            desyncPermanentlyActivated = true
+            
+            updateToggleUI(activateWorkSwitch, activateWorkKnob, true)
         end)
+    end)
 
-        statusLabel.Text = "⚡ Status: Animations Stopped"
-        unwalk.Text = "✅ RESTORE ANIM"
-        unwalkActive = true
+    local dragging = false
+    local dragStart, startPos
+
+    local function update(input)
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
     end
-end)
 
--- Auto TP Left
-autoTpLeft.MouseButton1Click:Connect(function()
-    local root = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-    
-    local sequence = {
-        CFrame.new(-370.810913, -7.00000334, 41.2687263),
-        CFrame.new(-336.355286, -5.10107088, 17.2327671)
-    }
-    
-    root.CFrame = sequence[1]
-    task.wait(0.1)
-    root.CFrame = sequence[2]
-    
-    statusLabel.Text = "⚡ Status: TP Left Executed"
-    task.wait(2)
-    statusLabel.Text = "⚡ Status: Ready"
-end)
-
--- Auto TP Right
-autoTpRight.MouseButton1Click:Connect(function()
-    local root = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-    
-    local sequence = {
-        CFrame.new(-354.782867, -7.00000334, 92.8209305),
-        CFrame.new(-336.942902, -5.10106993, 99.3276443)
-    }
-    
-    root.CFrame = sequence[1]
-    task.wait(0.1)
-    root.CFrame = sequence[2]
-    
-    statusLabel.Text = "⚡ Status: TP Right Executed"
-    task.wait(2)
-    statusLabel.Text = "⚡ Status: Ready"
-end)
-
--- Base detection loop
-task.spawn(function()
-    while task.wait(0.5) do
-        currentBase = detectCurrentBase()
-        
-        if currentBase then
-            baseLabel.Text = "📍 Current Base: " .. currentBase
-            baseLabel.TextColor3 = currentBase == "Base1" and Color3.fromRGB(255, 100, 100) or Color3.fromRGB(100, 150, 255)
-        else
-            baseLabel.Text = "📍 Current Base: None"
-            baseLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
-        end
-    end
-end)
-
--- Auto target closest brainrot
-task.spawn(function()
-    while task.wait(1) do
-        local root = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
-        if not root then continue end
-
-        local bestBrainrot = nil
-        local bestDist = math.huge
-        
-        for _, obj in pairs(Workspace:GetDescendants()) do
-            if obj:IsA("Model") and obj.Name:lower():find("brainrot") then
-                local primaryPart = obj.PrimaryPart or obj:FindFirstChildWhichIsA("BasePart")
-                if primaryPart then
-                    -- Filter by base if on one
-                    if currentBase == "Base1" and primaryPart.Position.Z > 60 then continue end
-                    if currentBase == "Base2" and primaryPart.Position.Z < 60 then continue end
-                    
-                    local dist = (root.Position - primaryPart.Position).Magnitude
-                    if dist < bestDist and dist < 200 then
-                        bestDist = dist
-                        bestBrainrot = primaryPart
-                    end
+    header.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = mainFrame.Position
+            
+            TweenService:Create(header.UIStroke, TweenInfo.new(0.2), {
+                Thickness = 2.5
+            }):Play()
+            
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging = false
+                    TweenService:Create(header.UIStroke, TweenInfo.new(0.2), {
+                        Thickness = 1.5
+                    }):Play()
                 end
-            end
+            end)
         end
+    end)
 
-        if bestBrainrot then
-            posB = CFrame.new(bestBrainrot.Position)
-            makeBeam(bestBrainrot.Position, 2)
+    UserInputService.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            update(input)
         end
-    end
-end)
+    end)
+end
 
--- Steal TP
-ProximityPromptService.PromptButtonHoldEnded:Connect(function(prompt, sender)
-    if sender ~= lp then return end
-    if prompt.Name ~= "Steal" and prompt.ActionText ~= "Steal" then return end
+-- LOADING SCREEN
+local loadScreenGui = Instance.new("ScreenGui")
+loadScreenGui.Name = "PremiumLoadScreen"
+loadScreenGui.ResetOnSpawn = false
+loadScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+loadScreenGui.DisplayOrder = 1000
+loadScreenGui.Parent = localPlayer:WaitForChild("PlayerGui")
 
-    local root = lp.Character and lp.Character:FindFirstChild("HumanoidRootPart")
-    if not root then return end
+local loadBackground = Instance.new("Frame")
+loadBackground.Name = "LoadBackground"
+loadBackground.Size = UDim2.new(1, 0, 1, 0)
+loadBackground.Position = UDim2.new(0, 0, 0, 0)
+loadBackground.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+loadBackground.BackgroundTransparency = 0.3
+loadBackground.BorderSizePixel = 0
+loadBackground.Parent = loadScreenGui
 
-    if posA then 
-        root.CFrame = posA 
-        statusLabel.Text = "⚡ Status: Steal Executed - Position A"
+local mainContainer = Instance.new("Frame")
+mainContainer.Name = "MainContainer"
+mainContainer.Size = UDim2.new(0, 400, 0, 300)
+mainContainer.Position = UDim2.new(0.5, -200, 0.5, -150)
+mainContainer.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
+mainContainer.BackgroundTransparency = 0.1
+mainContainer.BorderSizePixel = 0
+mainContainer.Parent = loadBackground
+
+Instance.new("UICorner", mainContainer).CornerRadius = UDim.new(0, 15)
+local containerStroke = Instance.new("UIStroke", mainContainer)
+containerStroke.Color = Color3.fromRGB(80, 120, 200)
+containerStroke.Thickness = 2
+containerStroke.Transparency = 0.3
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Name = "TitleLabel"
+titleLabel.Size = UDim2.new(1, 0, 0, 60)
+titleLabel.Position = UDim2.new(0, 0, 0.1, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "SEMI TELEPORT"
+titleLabel.Font = Enum.Font.GothamBlack
+titleLabel.TextSize = 32
+titleLabel.TextColor3 = Color3.fromRGB(240, 240, 255)
+titleLabel.TextStrokeTransparency = 0.3
+titleLabel.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+titleLabel.Parent = mainContainer
+
+local subtitleLabel = Instance.new("TextLabel")
+subtitleLabel.Name = "SubtitleLabel"
+subtitleLabel.Size = UDim2.new(1, 0, 0, 30)
+subtitleLabel.Position = UDim2.new(0, 0, 0.25, 0)
+subtitleLabel.BackgroundTransparency = 1
+subtitleLabel.Text = "LOADING PLEASE WAIT"
+subtitleLabel.Font = Enum.Font.GothamMedium
+subtitleLabel.TextSize = 16
+subtitleLabel.TextColor3 = Color3.fromRGB(180, 180, 200)
+subtitleLabel.Parent = mainContainer
+
+local progressContainer = Instance.new("Frame")
+progressContainer.Name = "ProgressContainer"
+progressContainer.Size = UDim2.new(1, -80, 0, 8)
+progressContainer.Position = UDim2.new(0, 40, 0.65, 0)
+progressContainer.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+progressContainer.BorderSizePixel = 0
+progressContainer.Parent = mainContainer
+
+Instance.new("UICorner", progressContainer).CornerRadius = UDim.new(1, 0)
+
+local progressFill = Instance.new("Frame")
+progressFill.Name = "ProgressFill"
+progressFill.Size = UDim2.new(0, 0, 1, 0)
+progressFill.Position = UDim2.new(0, 0, 0, 0)
+progressFill.BackgroundColor3 = Color3.fromRGB(80, 120, 200)
+progressFill.BorderSizePixel = 0
+progressFill.Parent = progressContainer
+
+Instance.new("UICorner", progressFill).CornerRadius = UDim.new(1, 0)
+
+task.spawn(function()
+    mainContainer.Position = UDim2.new(0.5, -200, 0.4, -150)
+    mainContainer.BackgroundTransparency = 1
+    
+    TweenService:Create(mainContainer, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Position = UDim2.new(0.5, -200, 0.5, -150),
+        BackgroundTransparency = 0.1
+    }):Play()
+    
+    task.wait(0.5)
+    
+    for i = 0, 100, 5 do
+        TweenService:Create(progressFill, TweenInfo.new(0.1), {Size = UDim2.new(i/100, 0, 1, 0)}):Play()
+        task.wait(0.05)
     end
     
-    if posB then 
-        task.wait(0.05) 
-        root.CFrame = posB 
-        statusLabel.Text = "⚡ Status: Steal Executed - Position B"
-    end
+    task.wait(0.5)
     
-    task.wait(2)
-    statusLabel.Text = "⚡ Status: Ready"
+    TweenService:Create(mainContainer, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
+    TweenService:Create(loadBackground, TweenInfo.new(0.5), {BackgroundTransparency = 1}):Play()
+    
+    task.wait(0.5)
+    loadScreenGui:Destroy()
+    
+    loadMainUI()
 end)
 
--- Startup animation
-main.Size = UDim2.fromOffset(0, 0)
-main.BackgroundTransparency = 1
-
-TweenService:Create(main, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-    Size = UDim2.fromOffset(320, 450),
-    BackgroundTransparency = 0
-}):Play()
-
-print("✅ CAPY INSTA STEAL Loaded!")
-print("📍 Base indicators created")
-print("🐹 by ARTFUL & MYSKYP")
+print("✨ Script configured for: " .. (IS_MOBILE and "MOBILE" or "PC") .. " device")
+print("🎯 Auto-click ProximityPrompt: ENABLED")
+print("📍 Set Custom Position: ENABLED")
